@@ -1,0 +1,29 @@
+{
+  "name": "dali-iot-dashboard",
+  "version": "1.0.0",
+  "description": "IoT Dashboard for DALI Lighting Controllers",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=services/api",
+    "dev:web": "npm run dev --workspace=apps/dashboard",
+    "build:api": "npm run build --workspace=services/api",
+    "build:web": "npm run build --workspace=apps/dashboard",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:api": "npm run test --workspace=services/api",
+    "test:web": "npm run test --workspace=apps/dashboard",
+    "docker:up": "docker compose -f infrastructure/docker-compose.yml up -d --build",
+    "docker:down": "docker compose -f infrastructure/docker-compose.yml down",
+    "docker:logs": "docker compose -f infrastructure/docker-compose.yml logs -f"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

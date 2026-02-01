@@ -1,0 +1,32 @@
+{
+  "name": "@dali/api",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "fastify": "^4.26.0",
+    "@fastify/websocket": "^8.3.1",
+    "@fastify/cors": "^9.0.1",
+    "dotenv": "^16.4.1",
+    "axios": "^1.6.7",
+    "influx": "^5.9.3",
+    "pino": "^8.19.0",
+    "pino-pretty": "^10.3.1",
+    "bcrypt": "^5.1.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "@types/bcrypt": "^5.0.2",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  }
+}
