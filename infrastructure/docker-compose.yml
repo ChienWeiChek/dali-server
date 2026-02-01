@@ -24,6 +24,8 @@ services:
     environment:
       - PORT=3000
       - INFLUX_URL=http://influxdb:8086
+      - CONTROLLER_CONFIG_PATH=/app/config/controllers.json
+      - AUTH_CONFIG_PATH=/app/config/auth.json
     depends_on:
       - influxdb
     networks:

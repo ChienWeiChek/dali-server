@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify';
 
 export default async function wsRoutes(fastify: FastifyInstance) {
-  fastify.get('/ws/devices', { websocket: true }, (connection, req) => {
+  fastify.get('/api/ws/devices', { websocket: true }, (connection, req) => {
     connection.socket.on('message', message => {
+      console.log("🚀 ~ wsRoutes ~ message:", message)
       // Handle incoming messages if needed (e.g. subscribe to specific devices)
     });
 

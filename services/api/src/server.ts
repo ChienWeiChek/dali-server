@@ -31,27 +31,15 @@ const start = async () => {
     await fastify.register(historyRoutes);
     await fastify.register(wsRoutes);
 
-    fastify.get('/health', async () => {
-      return { status: 'ok' };
-    });
-    await fastify.register(websocket);
-
-    fastify.get('/health', async () => {
+    fastify.get('/api/health', async () => {
       return { status: 'ok' };
     });
 
-    fastify.get('/config', async () => {
-      // Don't return secrets in prod!
+    fastify.get('/api/config', async () => {
       return {
         controllers: config.controllers.length,
         influx: config.influx.url,
       };
-    });
-
-    fastify.get('/ws', { websocket: true }, (connection, req) => {
-      connection.socket.on('message', message => {
-        connection.socket.send('echo: ' + message);
-      });
     });
 
     await fastify.listen({ port: config.server.port, host: '0.0.0.0' });
