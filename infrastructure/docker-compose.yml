@@ -67,7 +67,7 @@ services:
     ports:
       - "8086:8086"
     volumes:
-      - ./influx/data:/var/lib/influxdb
+      - influx_data:/var/lib/influxdb
       - ./influx/init.iql:/docker-entrypoint-initdb.d/init.iql:ro
     networks:
       - dali-net
@@ -77,6 +77,8 @@ services:
     restart: unless-stopped
     ports:
       - "8888:8888"
+    volumes:
+      - chronograf_data:/var/lib/chronograf
     environment:
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_USERNAME=${INFLUX_ADMIN_USER:-admin}
@@ -92,3 +94,5 @@ networks:
 
 volumes:
   mosquitto_data:
+  influx_data:
+  chronograf_data:
