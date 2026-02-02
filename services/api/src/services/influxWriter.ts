@@ -9,12 +9,13 @@ export class InfluxWriter {
   private timer: NodeJS.Timeout | null = null;
 
   constructor(config: AppConfig['influx']) {
+    const url = new URL(config.url);
     this.influx = new InfluxDB({
-      host: 'influxdb', // docker service name
-      port: 8086,
+      host: url.hostname, // docker service name
+      port: parseInt(url.port) || 8086,
       database: config.bucket, // Using database for Influx 1.8 compatibility
-      username: 'admin', // Hardcoded or from env if needed for older influx
-      password: 'admin',
+      username: config.username || 'admin',
+      password: config.password || 'admin',
       // For 1.8 we might not use token in the same way as 2.x, but let's stick to standard config
     });
 

@@ -1,9 +1,9 @@
 [
   {
     "name": "Controller 1",
-    "ip": "192.168.1.100",
-    "username": "admin",
-    "password": "password",
-    "pollingIntervalSec": 10
+    "ip": "192.168.68.188",
+    "username": "jocedali",
+    "password": "dali88",
+    "pollingIntervalSec": 5
   }
 ]

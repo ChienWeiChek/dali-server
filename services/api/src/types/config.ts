@@ -4,11 +4,19 @@ export interface ControllerConfig {
   username: string;
   password?: string; // Optional because we might load it from elsewhere or secrets
   pollingIntervalSec: number;
+  batchSize?: number;
 }
 
 export interface AuthConfig {
   username: string;
   passwordHash: string;
+}
+
+export interface MqttConfig {
+  brokerUrl: string;
+  username?: string;
+  password?: string;
+  topic: string;
 }
 
 export interface AppConfig {
@@ -19,7 +27,10 @@ export interface AppConfig {
     token: string;
     org: string;
     bucket: string;
+    username?: string;
+    password?: string;
   };
+  mqtt: MqttConfig;
   server: {
     port: number;
   };

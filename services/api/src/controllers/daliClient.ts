@@ -1,5 +1,5 @@
-import axios, { AxiosInstance } from 'axios';
-import { ControllerConfig } from '../types/config.js';
+import axios, { AxiosInstance } from "axios";
+import { ControllerConfig } from "../types/config.js";
 
 export class DaliClient {
   private axiosInstance: AxiosInstance;
@@ -16,7 +16,7 @@ export class DaliClient {
 
   async login(): Promise<void> {
     try {
-      const response = await this.axiosInstance.post('/auth/login', {
+      const response = await this.axiosInstance.post("/auth/login", {
         username: this.config.username,
         password: this.config.password,
       });
@@ -25,15 +25,20 @@ export class DaliClient {
         this.authHeader = response.data.authHeader;
         console.log(`[${this.config.name}] Login successful`);
       } else {
-        throw new Error('Invalid login response');
+        throw new Error("Invalid login response");
       }
     } catch (error) {
-      console.error(`[${this.config.name}] Login failed:`, error);
+      console.error(`[${this.config.name}] Login failed`);
       throw error;
     }
   }
 
-  private async request<T>(method: 'get' | 'post', url: string, data?: any, retry = true): Promise<T> {
+  private async request<T>(
+    method: "get" | "post",
+    url: string,
+    data?: any,
+    retry = true,
+  ): Promise<T> {
     if (!this.authHeader) {
       await this.login();
     }
@@ -49,7 +54,10 @@ export class DaliClient {
       });
       return response.data;
     } catch (error: any) {
-      if (retry && (error.response?.status === 401 || error.response?.status === 403)) {
+      if (
+        retry &&
+        (error.response?.status === 401 || error.response?.status === 403)
+      ) {
         console.warn(`[${this.config.name}] Token expired, re-logging in...`);
         this.authHeader = null;
         await this.login();
@@ -60,17 +68,26 @@ export class DaliClient {
   }
 
   async getDevices(): Promise<any[]> {
-    const response = await this.request<{ deviceList: any[] }>('get', '/api/bmsapi/dali-devices');
+    const response = await this.request<{ deviceList: any[] }>(
+      "get",
+      "/api/bmsapi/dali-devices",
+    );
     return response.deviceList || [];
   }
 
   async getDeviceDetails(guid: string): Promise<any> {
-    return this.request<any>('get', `/api/bmsapi/dali-devices/${guid}`);
+    return this.request<any>("get", `/api/bmsapi/dali-devices/${guid}`);
   }
 
   async getProperty(guid: string, property: string): Promise<any> {
     // Try active first, maybe fallback to last?
     // Api.md says /active
-    return this.request<any>('get', `/api/bmsapi/dali-devices/${guid}/property/${property}/active`);
+    return this.request<any>(
+      "get",
+      `/api/bmsapi/dali-devices/${guid}/property/${property}/active`,
+    );
+  }
+  getConfig(): ControllerConfig {
+    return this.config;
   }
 }

@@ -1,12 +1,14 @@
-import { InfluxDB } from 'influx';
-import { loadConfig } from '../src/config/loader.js';
+import { InfluxDB } from "influx";
+import { loadConfig } from "../src/config/loader.js";
 
 async function seed() {
   const config = await loadConfig();
   const influx = new InfluxDB({
-    host: 'localhost',
+    host: "localhost",
     port: 8086,
-    database: config.influx.bucket,
+    database: config.influx.bucket, // Using database for Influx 1.8 compatibility
+    username: config.influx.username || "admin",
+    password: config.influx.password || "admin",
   });
 
   const points = [];
@@ -14,10 +16,10 @@ async function seed() {
 
   for (let i = 0; i < 100; i++) {
     points.push({
-      measurement: 'dali_property',
+      measurement: "dali_property",
       tags: {
-        device_guid: 'mock-device-1',
-        property: 'driverInputPower',
+        device_guid: "mock-device-1",
+        property: "driverInputPower",
       },
       fields: {
         value_num: Math.random() * 50,
@@ -27,7 +29,7 @@ async function seed() {
   }
 
   await influx.writePoints(points);
-  console.log('Seeded 100 points');
+  console.log("Seeded 100 points");
 }
 
 seed().catch(console.error);

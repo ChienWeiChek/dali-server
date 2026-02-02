@@ -3,7 +3,9 @@ import websocket from '@fastify/websocket';
 import cors from '@fastify/cors';
 import { loadConfig } from './config/loader.js';
 import { InfluxWriter } from './services/influxWriter.js';
-import { PollerService } from './services/poller.js';
+// import { PollerService } from './services/poller.js';
+import { MqttSubscriber } from './services/mqttSubscriber.js';
+import { DaliClient } from './controllers/daliClient.js';
 import deviceRoutes from './routes/devices.js';
 import historyRoutes from './routes/history.js';
 import wsRoutes from './routes/ws.js';
@@ -20,8 +22,12 @@ const start = async () => {
     });
 
     const influxWriter = new InfluxWriter(config.influx);
-    const poller = new PollerService(config, influxWriter);
-    poller.start();
+    // const poller = new PollerService(config, influxWriter);
+    // poller.start();
+
+    const clients = config.controllers.map((c) => new DaliClient(c));
+    const mqttSubscriber = new MqttSubscriber(config.mqtt, influxWriter, clients);
+    mqttSubscriber.connect();
 
     await fastify.register(cors);
     await fastify.register(websocket);
