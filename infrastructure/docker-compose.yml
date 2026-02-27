@@ -23,11 +23,11 @@ services:
       - ../.env
     environment:
       - PORT=3000
-      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_URL=http://influxdb2:8086
       - CONTROLLER_CONFIG_PATH=/app/config/controllers.json
       - AUTH_CONFIG_PATH=/app/config/auth.json
     depends_on:
-      - influxdb
+      - influxdb2
     networks:
       - dali-net
     volumes:
@@ -56,35 +56,21 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-admin}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-admin123}
 
-  influxdb:
-    image: influxdb:1.8-alpine
+  influxdb2:
+    image: influxdb:2.7
     restart: unless-stopped
-    environment:
-      - INFLUXDB_DB=dali_devices
-      - INFLUXDB_ADMIN_USER=${INFLUX_ADMIN_USER:-admin}
-      - INFLUXDB_ADMIN_PASSWORD=${INFLUX_ADMIN_PASSWORD:-admin123}
-      - INFLUXDB_HTTP_AUTH_ENABLED=true
     ports:
       - "8086:8086"
-    volumes:
-      - influx_data:/var/lib/influxdb
-      - ./influx/init.iql:/docker-entrypoint-initdb.d/init.iql:ro
-    networks:
-      - dali-net
-
-  chronograf:
-    image: chronograf:1.10-alpine
-    restart: unless-stopped
-    ports:
-      - "8888:8888"
-    volumes:
-      - chronograf_data:/var/lib/chronograf
     environment:
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_USERNAME=${INFLUX_ADMIN_USER:-admin}
-      - INFLUXDB_PASSWORD=${INFLUX_ADMIN_PASSWORD:-admin123}
-    depends_on:
-      - influxdb
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUX2_INIT_USERNAME:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUX2_INIT_PASSWORD:-changeme}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUX2_INIT_ORG:-dali}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUX2_INIT_BUCKET:-dali_devices}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUX2_INIT_TOKEN:-dali-dev-token}
+    volumes:
+      - influxdb2_data:/var/lib/influxdb2
+      - influxdb2_config:/etc/influxdb2
     networks:
       - dali-net
 
@@ -94,5 +80,5 @@ networks:
 
 volumes:
   mosquitto_data:
-  influx_data:
-  chronograf_data:
+  influxdb2_data:
+  influxdb2_config:

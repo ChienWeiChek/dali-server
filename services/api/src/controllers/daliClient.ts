@@ -87,6 +87,22 @@ export class DaliClient {
       `/api/bmsapi/dali-devices/${guid}/property/${property}/active`,
     );
   }
+  async checkHealth(): Promise<{ status: 'healthy' | 'unhealthy'; message: string }> {
+    try {
+      // Try to get devices list as a simple connectivity check
+      await this.getDevices();
+      return { 
+        status: 'healthy', 
+        message: `Connected to controller ${this.config.name}` 
+      };
+    } catch (error: any) {
+      return { 
+        status: 'unhealthy', 
+        message: `Controller ${this.config.name} unreachable: ${error.message || 'Unknown error'}` 
+      };
+    }
+  }
+
   getConfig(): ControllerConfig {
     return this.config;
   }

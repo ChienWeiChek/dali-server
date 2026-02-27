@@ -80,11 +80,24 @@ export class MqttSubscriber {
     });
   }
 
+  checkHealth(): { status: 'healthy' | 'unhealthy'; message: string } {
+    if (!this.client) {
+      return { status: 'unhealthy', message: 'MQTT client not initialized' };
+    }
+    
+    if (this.client.connected) {
+      return { status: 'healthy', message: 'Connected to MQTT broker' };
+    }
+    
+    return { status: 'unhealthy', message: 'MQTT client disconnected' };
+  }
+
   private async handleMessage(topic: string, message: Buffer) {
     try {
       // Topic structure: DALI-PRO-IoT/<deviceName>/devices/<category>/<guid>/data/<property>
       // Example: DALI-PRO-IoT/Controller1/devices/sensors/abc-123/data/temperature
       
+      console.log(`${topic} -> ${message}`)
       const parts = topic.split('/');
       // Expecting 7 parts
       // 0: DALI-PRO-IoT

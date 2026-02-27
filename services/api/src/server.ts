@@ -9,6 +9,7 @@ import { DaliClient } from './controllers/daliClient.js';
 import deviceRoutes from './routes/devices.js';
 import historyRoutes from './routes/history.js';
 import wsRoutes from './routes/ws.js';
+import healthRoutes from './routes/health.js';
 
 const start = async () => {
   try {
@@ -33,13 +34,14 @@ const start = async () => {
     await fastify.register(websocket);
 
     // Register routes
+    await fastify.register(healthRoutes, {
+      mqttSubscriber,
+      influxWriter,
+      daliClients: clients,
+    });
     await fastify.register(deviceRoutes);
     await fastify.register(historyRoutes);
     await fastify.register(wsRoutes);
-
-    fastify.get('/api/health', async () => {
-      return { status: 'ok' };
-    });
 
     fastify.get('/api/config', async () => {
       return {

@@ -16,7 +16,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:api": "npm run test --workspace=services/api",
     "test:web": "npm run test --workspace=apps/dashboard",
-    "docker:up": "docker compose -f infrastructure/docker-compose.yml up -d --build",
+    "docker:up": "docker compose -f infrastructure/docker-compose.yml up -d --build --remove-orphans",
     "docker:down": "docker compose -f infrastructure/docker-compose.yml down",
     "docker:logs": "docker compose -f infrastructure/docker-compose.yml logs -f"
   },

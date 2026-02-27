@@ -35,7 +35,7 @@ export async function loadConfig(): Promise<AppConfig> {
     controllers,
     auth,
     influx: {
-      url: process.env.INFLUX_URL || 'http://localhost:8086',
+      url: process.env.INFLUX2_URL || process.env.INFLUX_URL || 'http://localhost:8086',
       token: process.env.INFLUX_TOKEN || 'my-token',
       org: process.env.INFLUX_ORG || 'dali',
       bucket: process.env.INFLUX_BUCKET || 'dali_devices',
