@@ -13,3 +13,6 @@ SELECT count("value_num") AS "data_point_count"
 FROM "dali_devices"."monthly"."dali_property"
 GROUP BY "title", "property"
 ```
+
+influx bucket delete --name dali_devices --org dali
+influx bucket create --name dali_devices --org dali --retention 0
