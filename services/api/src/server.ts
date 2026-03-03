@@ -10,6 +10,7 @@ import deviceRoutes from './routes/devices.js';
 import historyRoutes from './routes/history.js';
 import wsRoutes from './routes/ws.js';
 import healthRoutes from './routes/health.js';
+import metricsRoutes from './routes/metrics.js';
 
 const start = async () => {
   try {
@@ -28,10 +29,10 @@ const start = async () => {
 
     const clients = config.controllers.map((c) => new DaliClient(c));
     const mqttSubscriber = new MqttSubscriber(config.mqtt, influxWriter, clients);
-    mqttSubscriber.connect();
+    // mqttSubscriber.connect();
 
     await fastify.register(cors);
-    await fastify.register(websocket);
+    // await fastify.register(websocket);
 
     // Register routes
     await fastify.register(healthRoutes, {
@@ -39,9 +40,10 @@ const start = async () => {
       influxWriter,
       daliClients: clients,
     });
-    await fastify.register(deviceRoutes);
+    await fastify.register(deviceRoutes, { daliClients: clients });
     await fastify.register(historyRoutes);
     await fastify.register(wsRoutes);
+    await fastify.register(metricsRoutes);
 
     fastify.get('/api/config', async () => {
       return {

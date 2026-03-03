@@ -16,7 +16,6 @@ async function restore() {
 
     // Check health before starting
     const health = await influxWriter.checkHealth();
-    console.log("🚀 ~ restore ~ health:", health);
     if (health.status !== "healthy") {
       console.error(`InfluxDB unhealthy: ${health.message}`);
       process.exit(1);
@@ -123,13 +122,11 @@ async function restore() {
         const dataToWrite = {
           // Only include tags that have values to prevent undefined/null errors
           ...(controller && { controller }),
-          ...(category && { category }),
           ...(guid && { device_guid: guid }),
           ...(property && { property }),
           ...(unit && { unit }),
           ...(title && { title }),
         };
-        console.log("🚀 ~ restore ~ dataToWrite:", dataToWrite)
         await influxWriter.writePoint({
           measurement: "dali_property",
           tags: dataToWrite,

@@ -1,85 +1,367 @@
-import { useState, useEffect } from 'react';
-import { Container, Grid, Paper, Typography, Card, CardContent } from '@mui/material';
-import RealTimeGauge from '../components/charts/RealTimeGauge';
-import HistoryChart from '../components/charts/HistoryChart';
+import { useState, useEffect } from "react";
+import {
+  Container,
+  Grid,
+  Paper,
+  Box,
+  Typography,
+  CircularProgress,
+} from "@mui/material";
+import {
+  Devices as DevicesIcon,
+  Bolt as BoltIcon,
+  Error as ErrorIcon,
+  DeviceThermostat,
+} from "@mui/icons-material";
 
-export default function Dashboard() {
-  const [lightLevel, setLightLevel] = useState(0);
-  const [power, setPower] = useState(0);
-  const [history, setHistory] = useState<{ time: string; value: number }[]>([]);
+// Components
+import StatCard from "../components/StatCard";
+import TimeRangeSelector from "../components/TimeRangeSelector";
+import BarChart from "../components/charts/BarChart";
+import PieChart from "../components/charts/PieChart";
+import AreaChart from "../components/charts/AreaChart";
+import RealTimeGauge from "../components/charts/RealTimeGauge";
+import HistoryChart from "../components/charts/HistoryChart";
+import useSWR from "swr";
+// API
+import { apiFetch } from "../lib/apiClient";
 
-  // Mock data update
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-      const newPower = Math.random() * 50 + 10;
-      
-      setLightLevel(Math.random() * 100);
-      setPower(newPower);
-      
-      setHistory(prev => {
-        const next = [...prev, { time, value: newPower }];
-        if (next.length > 20) next.shift();
-        return next;
+// Types
+import type { DashboardMetrics, ChartData } from "../types/dashboard";
+import { useDevices } from "../hooks/useDevices";
+
+const DeviceCard = () => {
+  const { devices, loading } = useDevices();
+
+  return (
+    <StatCard
+      title="Total Devices"
+      loading={loading}
+      value={devices.length}
+      icon={<DevicesIcon fontSize="large" />}
+      color="#1976d2"
+    />
+  );
+};
+
+const EnergySummaryCard = () => {
+  const { data, error, isLoading } = useSWR(
+    `/api/devices/energy-summary`,
+    async () => {
+      const res = await apiFetch(`/api/devices/energy-summary`);
+      console.log("🚀 ~ EnergySummaryCard ~ res.ok:", res.ok);
+      return res.ok
+        ? res.json()
+        : Promise.reject(new Error("Failed to fetch energy summary"));
+    },
+  );
+  return (
+    <StatCard
+      title="Total Energy"
+      loading={isLoading}
+      value={(data?.total / 1000).toFixed(2)}
+      unit={"kWh"}
+      icon={<BoltIcon fontSize="large" />}
+      color="#ed6c02"
+    />
+  );
+};
+
+const DriverTemperatureCard = () => {
+  const { data, error, isLoading } = useSWR(
+    `/api/devices/driver-temperature`,
+    async () => {
+      const res = await apiFetch(`/api/devices/driver-temperature`);
+      return res.ok
+        ? res.json()
+        : Promise.reject(new Error("Failed to fetch energy summary"));
+    },
+  );
+  return (
+    <StatCard
+      title="Driver Avg Temperature"
+      loading={isLoading}
+      value={data?.avg}
+      unit={data?.unit || "°C"}
+      icon={<DeviceThermostat fontSize="large" />}
+      color="#2e7d32"
+    />
+  );
+};
+const RealTimeGauges = () => {
+  const [realTimeData, setRealTimeData] = useState({
+    power: 0,
+    temperature: 0,
+    voltage: 0,
+  });
+
+  const fetchRealTimeData = async () => {
+    try {
+      const res = await apiFetch(
+        `/api/devices/real-time-data?type[]=driverInputPower&type[]=driverTemperature&type[]=driverInputVoltage`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+
+      setRealTimeData({
+        power: data.avg?.driverInputPower?.value || 0,
+        temperature: data.avg?.driverTemperature?.value || 0,
+        voltage: data.avg?.driverInputVoltage?.value || 0,
       });
-    }, 2000);
+    } catch (err: any) {
+      console.error("Error fetching real-time data:", err);
+    }
+  };
 
+  // Fetch real-time data for gauges
+  useEffect(() => {
+    fetchRealTimeData();
+    const interval = setInterval(fetchRealTimeData, 5000); // Update every 5s
     return () => clearInterval(interval);
   }, []);
 
+  /* Charts Row 4 - Gauge Charts */
   return (
-    <Container maxWidth="lg" className="py-8">
-      <Typography variant="h4" component="h1" className="mb-6">
-        System Overview
-      </Typography>
+    <Grid container spacing={3} mb={3}>
+      <Grid item xs={12} md={4}>
+        <Paper sx={{ p: 2 }}>
+          <RealTimeGauge
+            value={realTimeData.power}
+            min={0}
+            max={200}
+            unit="W"
+            title="Driver Input Power"
+          />
+        </Paper>
+      </Grid>
+      <Grid item xs={12} md={4}>
+        <Paper sx={{ p: 2 }}>
+          <RealTimeGauge
+            value={realTimeData.temperature}
+            min={0}
+            max={100}
+            unit="°C"
+            title="Driver Temperature"
+          />
+        </Paper>
+      </Grid>
+      <Grid item xs={12} md={4}>
+        <Paper sx={{ p: 2 }}>
+          <RealTimeGauge
+            value={realTimeData.voltage}
+            min={0}
+            max={300}
+            unit="V"
+            title="Input Voltage"
+          />
+        </Paper>
+      </Grid>
+    </Grid>
+  );
+};
 
-      <Grid container spacing={4}>
-        {/* Summary Cards */}
-        <Grid item xs={12} md={4}>
-          <Card className="h-full bg-blue-50">
-            <CardContent>
-              <Typography variant="h6" color="textSecondary">Active Devices</Typography>
-              <Typography variant="h3">24</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card className="h-full bg-green-50">
-            <CardContent>
-              <Typography variant="h6" color="textSecondary">Total Power</Typography>
-              <Typography variant="h3">{Math.round(power * 24)} W</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card className="h-full bg-red-50">
-            <CardContent>
-              <Typography variant="h6" color="textSecondary">Errors</Typography>
-              <Typography variant="h3" color="error">0</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+export default function Dashboard() {
+  // State
+  const [timeRange, setTimeRange] = useState("24h");
 
-        {/* Real-time Gauges */}
-        <Grid item xs={12} md={6}>
-          <Paper className="p-4 h-full">
-            <RealTimeGauge title="Avg Light Level" value={Math.round(lightLevel)} unit="%" />
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Paper className="p-4 h-full">
-            <RealTimeGauge title="Avg Driver Power" value={Math.round(power)} unit="W" max={100} />
-          </Paper>
-        </Grid>
+  const [chartData, setChartData] = useState<ChartData>({
+    lightLevelTrend: [],
+    energyByDevice: [],
+    devicesByZone: [],
+    powerTrend: [],
+  });
 
-        {/* History Chart */}
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // useEffect(() => {
+  //   const devicesByZone = devices.reduce(
+  //     (acc: Record<string, number>, device) => {
+  //       const zone = device.zones?.length ? device.zones[0] : "Unassigned";
+  //       acc[zone] = (acc[zone] || 0) + 1;
+  //       return acc;
+  //     },
+  //     {},
+  //   );
+
+  //   setChartData((prev) => ({
+  //     ...prev,
+  //     devicesByZone: Object.entries(devicesByZone).map(([name, value]) => ({
+  //       name,
+  //       value,
+  //     })),
+  //   }));
+  // }, [devices]);
+
+  // Fetch historical data for trend charts
+  // useEffect(() => {
+  //   const fetchHistoricalData = async () => {
+  //     if (devices.length === 0) return;
+
+  //     const firstDevice = devices[0];
+  //     try {
+  //       // Fetch light level trend
+  //       const lightRes = await apiFetch(
+  //         `/api/devices/${firstDevice.guid}/history?property=lightLevel&range=${timeRange}`,
+  //       );
+  //       if (lightRes.ok) {
+  //         const lightData = await lightRes.json();
+  //         setChartData((prev) => ({
+  //           ...prev,
+  //           lightLevelTrend: lightData.map((d: any) => ({
+  //             time: new Date(d._time).toLocaleTimeString("en-US", {
+  //               hour: "2-digit",
+  //               minute: "2-digit",
+  //             }),
+  //             value: d.value_num || 0,
+  //           })),
+  //         }));
+  //       }
+
+  //       // Fetch power trend
+  //       const powerRes = await apiFetch(
+  //         `/api/devices/${firstDevice.guid}/history?property=driverInputPower&range=${timeRange}`,
+  //       );
+  //       if (powerRes.ok) {
+  //         const powerData = await powerRes.json();
+  //         setChartData((prev) => ({
+  //           ...prev,
+  //           powerTrend: powerData.map((d: any) => ({
+  //             time: new Date(d._time).toLocaleTimeString("en-US", {
+  //               hour: "2-digit",
+  //               minute: "2-digit",
+  //             }),
+  //             value: d.value_num || 0,
+  //           })),
+  //         }));
+  //       }
+  //     } catch (err: any) {
+  //       console.error("Error fetching historical data:", err);
+  //     }
+  //   };
+
+  //   fetchHistoricalData();
+  // }, [devices, timeRange]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        <Typography color="error">{error}</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Header */}
+      <Box
+        mb={4}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+      >
+        <Box>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Dashboard
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Monitor and analyze your DALI devices
+          </Typography>
+        </Box>
+        <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
+      </Box>
+
+      {/* KPI Cards */}
+      <Grid container spacing={3} mb={3}>
+        <Grid item xs={12} sm={6} md={3}>
+          <DeviceCard />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <DriverTemperatureCard />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <EnergySummaryCard />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          {/* <StatCard
+            title="Active Errors"
+            value={metrics.activeErrors}
+            icon={<ErrorIcon fontSize="large" />}
+            color={metrics.activeErrors > 0 ? "#d32f2f" : "#2e7d32"}
+          /> */}
+        </Grid>
+      </Grid>
+
+      {/* Charts Row 1 - Full Width Line Chart */}
+      <Grid container spacing={3} mb={3}>
         <Grid item xs={12}>
-          <Paper className="p-4">
-            <HistoryChart title="Power Consumption Trend (Live)" data={history} />
+          <Paper sx={{ p: 2 }}>
+            <HistoryChart
+              data={chartData.lightLevelTrend}
+              title={`Light Level Trends (${timeRange})`}
+              color="#5470C6"
+            />
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Charts Row 2 - Bar and Pie */}
+      <Grid container spacing={3} mb={3}>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <BarChart
+              data={chartData.energyByDevice}
+              title="Energy Consumption by Device"
+              color="#91cc75"
+              height="350px"
+            />
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <PieChart
+              data={chartData.devicesByZone}
+              title="Devices by Zone"
+              showLegend={true}
+            />
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Charts Row 3 - Area Chart */}
+      <Grid container spacing={3} mb={3}>
+        <Grid item xs={12}>
+          <Paper sx={{ p: 2 }}>
+            <AreaChart
+              data={chartData.powerTrend}
+              title={`Power Consumption Trend (${timeRange})`}
+              color="#ee6666"
+              gradient={true}
+            />
+          </Paper>
+        </Grid>
+      </Grid>
+      <RealTimeGauges />
     </Container>
   );
 }
