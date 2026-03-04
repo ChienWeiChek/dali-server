@@ -26,7 +26,7 @@ async function restore() {
     // The CSV is in the workspace root, which is two levels up from services/api
     const csvPath = path.resolve(
       process.cwd(),
-      "../../2026-02-27-15-38 Chronograf Data.csv",
+      "../../Data.csv",
     );
 
     console.log(`Reading CSV from: ${csvPath}`);
@@ -121,7 +121,8 @@ async function restore() {
         }
         const dataToWrite = {
           // Only include tags that have values to prevent undefined/null errors
-          ...(controller && { controller }),
+          // ...(controller && { controller }),
+          controller:"jocedali2",
           ...(guid && { device_guid: guid }),
           ...(property && { property }),
           ...(unit && { unit }),

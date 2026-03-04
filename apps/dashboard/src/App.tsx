@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Devices from "./pages/DevicesList";
+import Device from "./pages/Device";
 import Dashboard from "./pages/Dashboard";
+import Group from "./pages/Group";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import ClientLayout from "./components/ClientLayout";
 
@@ -26,6 +28,8 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/devices" element={<Devices />} />
+            <Route path="/devices/:controller/:guid" element={<Device />} />
+            <Route path="/groups/:controller" element={<Group/>} />
           </Route>
         </Routes>
       </BrowserRouter>

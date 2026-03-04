@@ -26,17 +26,27 @@ export default async function deviceRoutes(
           from(bucket: "${config.influx.bucket}")
             |> range(start: -30d)
             |> filter(fn: (r) => r._measurement == "dali_property")
-            |> group(columns: ["title"])
-            |> keep(columns: ["device_guid", "controller", "title"])
-            |> distinct(column: "device_guid")
+            |> map(fn: (r) => ({ r with combined_id: r.controller + "_" + r.device_guid }))
+            |> group(columns: ["controller"])
+            |> distinct(column: "combined_id")
         `;
 
-      const rows = await queryApi.collectRows(fluxQuery);
+      const rows = await queryApi.collectRows<{ _value: string }>(fluxQuery);
+
+      let liveDevices: Record<string, any> = {};
+      for (const client of daliClients) {
+        const devices = await client.getDevices();
+        liveDevices[client.getConfig().name] = devices.filter(
+          (item) =>
+            item.type === "gear" ||
+            item.type === "lightSensor" ||
+            item.type === "motionSensor",
+        ); // all live devices;
+      }
 
       return {
-        devices: rows,
-        source: "influxdb",
-        count: rows.length,
+        devices: rows, // from InfluxDB
+        liveDevices: liveDevices,
       };
     } catch (error) {
       request.log.error({ err: error }, "Error fetching devices from InfluxDB");
@@ -46,59 +56,12 @@ export default async function deviceRoutes(
     }
   });
 
-  fastify.get("/api/devices/:guid", async (request: any, reply) => {
-    const { guid } = request.params;
-    const { type } = request.query as { type?: string };
-
-    // If type is 'influxdb', fetch from InfluxDB
-    if (type === "influxdb") {
-      try {
-        const config = await loadConfig();
-        const queryApi = new InfluxDB({
-          url: config.influx.url,
-          token: config.influx.token,
-        }).getQueryApi(config.influx.org);
-
-        const safeGuid = validateTag(guid, "guid");
-
-        // Query to get the latest state of all properties for this device
-        const fluxQuery = `
-          from(bucket: "${config.influx.bucket}")
-            |> range(start: -30d)
-            |> filter(fn: (r) => r._measurement == "dali_property")
-            |> filter(fn: (r) => r.device_guid == "${safeGuid}")
-            |> pivot(rowKey:["_time", "property"], columnKey:["_field"], valueColumn:"_value")
-            |> group(columns: ["property"])
-            |> last()
-            |> keep(columns: ["_time", "property", "value_num", "value_str", "controller", "unit", "device_guid"])
-        `;
-
-        const rows = await queryApi.collectRows(fluxQuery);
-
-        if (rows.length === 0) {
-          return reply
-            .code(404)
-            .send({ error: "Device not found in InfluxDB" });
-        }
-
-        return {
-          guid: safeGuid,
-          properties: rows,
-          source: "influxdb",
-        };
-      } catch (error) {
-        request.log.error(
-          { err: error },
-          "Error fetching device from InfluxDB",
-        );
-        return reply
-          .code(500)
-          .send({ error: "Failed to fetch device from InfluxDB" });
-      }
-    }
+  fastify.get("/api/devices/:controller/:guid", async (request: any, reply) => {
+    const { guid, controller } = request.params;
 
     // Default behavior: Try to find device in all DALI clients
     for (const client of daliClients) {
+      if (client.getConfig().name !== controller) continue; // Skip clients that don't match the controller in the URL
       try {
         const device = await client.getDeviceDetails(guid);
         if (device) {
@@ -109,13 +72,31 @@ export default async function deviceRoutes(
       }
     }
 
-    // Fallback/Not found handling
-    // For now keeping consistent behavior if not found, or maybe return 404
-    // But since we aren't sure if getDeviceDetails throws 404 or what,
-    // we'll return a 404 if not found after checking all.
-
     return reply.code(404).send({ error: "Device not found" });
   });
+
+  fastify.get(
+    "/api/devices/:controller/:guid/:property",
+    async (request: any, reply) => {
+      const { guid, controller, property } = request.params;
+
+      // Default behavior: Try to find device in all DALI clients
+      for (const client of daliClients) {
+        if (client.getConfig().name !== controller) continue; // Skip clients that don't match the controller in the URL
+        try {
+          const device = await client.getProperty(guid, property);
+          if (device) {
+            return device;
+          }
+        } catch (error) {
+          console.log("🚀 ~ deviceRoutes ~ error:", error)
+          // Continue searching in other clients
+        }
+      }
+
+      return reply.code(404).send({ error: "Device not found" });
+    },
+  );
 }
 
 function validateTag(value: string, label: string): string {

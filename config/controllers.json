@@ -5,5 +5,12 @@
     "username": "jocedali",
     "password": "dali88",
     "pollingIntervalSec": 5
+  },
+  {
+    "name": "Controller 2",
+    "ip": "192.168.68.188",
+    "username": "jocedali",
+    "password": "dali88",
+    "pollingIntervalSec": 5
   }
 ]

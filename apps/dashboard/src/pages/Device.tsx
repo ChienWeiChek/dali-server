@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { apiFetch } from "@/lib/apiClient";
-import PropertyValue from "@/components/PropertyValue";
+import { apiFetch } from "../lib/apiClient";
+import PropertyValue from "../components/PropertyValue";
 
 type DeviceDetail = {
   guid: string;
@@ -16,7 +16,7 @@ type DeviceDetail = {
 };
 
 export default function DeviceDetailPage() {
-  const { guid } = useParams();
+  const { guid, controller } = useParams();
   const navigate = useNavigate();
   const [device, setDevice] = useState<DeviceDetail | null>(null);
   const [error, setError] = useState("");
@@ -25,7 +25,7 @@ export default function DeviceDetailPage() {
   useEffect(() => {
     const fetchDeviceDetails = async () => {
       try {
-        const res = await apiFetch(`/api/bmsapi/dali-devices/${guid}`, {
+        const res = await apiFetch(`/api/devices/${controller}/${guid}`, {
           method: "GET",
         });
         if (!res.ok)
@@ -96,6 +96,7 @@ export default function DeviceDetailPage() {
                   key={prop}
                   guid={guid as string}
                   property={prop}
+                  controller={controller as string}
                 />
               ))
             ) : (

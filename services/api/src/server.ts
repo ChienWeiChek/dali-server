@@ -1,16 +1,17 @@
-import Fastify from 'fastify';
-import websocket from '@fastify/websocket';
-import cors from '@fastify/cors';
-import { loadConfig } from './config/loader.js';
-import { InfluxWriter } from './services/influxWriter.js';
+import Fastify from "fastify";
+import websocket from "@fastify/websocket";
+import cors from "@fastify/cors";
+import { loadConfig } from "./config/loader.js";
+import { InfluxWriter } from "./services/influxWriter.js";
 // import { PollerService } from './services/poller.js';
-import { MqttSubscriber } from './services/mqttSubscriber.js';
-import { DaliClient } from './controllers/daliClient.js';
-import deviceRoutes from './routes/devices.js';
-import historyRoutes from './routes/history.js';
-import wsRoutes from './routes/ws.js';
-import healthRoutes from './routes/health.js';
-import metricsRoutes from './routes/metrics.js';
+import { MqttSubscriber } from "./services/mqttSubscriber.js";
+import { DaliClient } from "./controllers/daliClient.js";
+import deviceRoutes from "./routes/devices.js";
+import historyRoutes from "./routes/history.js";
+import groupsRoutes from "./routes/groups.js";
+import wsRoutes from "./routes/ws.js";
+import healthRoutes from "./routes/health.js";
+import metricsRoutes from "./routes/metrics.js";
 
 const start = async () => {
   try {
@@ -18,7 +19,7 @@ const start = async () => {
     const fastify = Fastify({
       logger: {
         transport: {
-          target: 'pino-pretty',
+          target: "pino-pretty",
         },
       },
     });
@@ -28,7 +29,11 @@ const start = async () => {
     // poller.start();
 
     const clients = config.controllers.map((c) => new DaliClient(c));
-    const mqttSubscriber = new MqttSubscriber(config.mqtt, influxWriter, clients);
+    const mqttSubscriber = new MqttSubscriber(
+      config.mqtt,
+      influxWriter,
+      clients,
+    );
     // mqttSubscriber.connect();
 
     await fastify.register(cors);
@@ -41,18 +46,19 @@ const start = async () => {
       daliClients: clients,
     });
     await fastify.register(deviceRoutes, { daliClients: clients });
+    await fastify.register(groupsRoutes, { daliClients: clients });
     await fastify.register(historyRoutes);
     await fastify.register(wsRoutes);
     await fastify.register(metricsRoutes);
 
-    fastify.get('/api/config', async () => {
+    fastify.get("/api/config", async () => {
       return {
         controllers: config.controllers.length,
         influx: config.influx.url,
       };
     });
 
-    await fastify.listen({ port: config.server.port, host: '0.0.0.0' });
+    await fastify.listen({ port: config.server.port, host: "0.0.0.0" });
   } catch (err) {
     console.error(err);
     process.exit(1);

@@ -1,6 +1,6 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/apiClient';
+"use client";
+import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/apiClient";
 
 type PropertyData = {
   guid: string;
@@ -14,9 +14,14 @@ type PropertyData = {
 interface PropertyValueProps {
   guid: string;
   property: string;
+  controller: string;
 }
 
-export default function PropertyValue({ guid, property }: PropertyValueProps) {
+export default function PropertyValue({
+  guid,
+  property,
+  controller,
+}: PropertyValueProps) {
   const [data, setData] = useState<PropertyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -27,10 +32,10 @@ export default function PropertyValue({ guid, property }: PropertyValueProps) {
         setLoading(true);
         setError(false);
         const res = await apiFetch(
-          `/api/bmsapi/dali-devices/${guid}/property/${property}/active`,
-          { method: 'GET' }
+          `/api/devices/${controller}/${guid}/${property}`,
+          { method: "GET" },
         );
-        
+
         if (res.ok) {
           const propData = await res.json();
           setData(propData);
@@ -70,7 +75,7 @@ export default function PropertyValue({ guid, property }: PropertyValueProps) {
     <div className="border-b py-2 text-sm text-gray-700 flex justify-between">
       <span className="font-semibold">{property}</span>
       <span>
-        {data.value} {data.unit || ''}
+        {data.value} {data.unit || ""}
       </span>
     </div>
   );

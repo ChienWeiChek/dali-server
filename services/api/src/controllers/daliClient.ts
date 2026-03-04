@@ -34,7 +34,7 @@ export class DaliClient {
   }
 
   private async request<T>(
-    method: "get" | "post",
+    method: "get" | "post" | "put" | "delete",
     url: string,
     data?: any,
     retry = true,
@@ -84,21 +84,57 @@ export class DaliClient {
     // Api.md says /active
     return this.request<any>(
       "get",
-      `/api/bmsapi/dali-devices/${guid}/property/${property}/active`,
+      `/api/bmsapi/dali-devices/${guid}/property/${property}/last`,
     );
   }
-  async checkHealth(): Promise<{ status: 'healthy' | 'unhealthy'; message: string }> {
+
+  async getGroups(): Promise<any[]> {
+    const response = await this.request<{ lightGroupList: any[] }>(
+      "get",
+      "/api/bmsapi/groups",
+    );
+    return response.lightGroupList || [];
+  }
+
+  async getGroupsDetail(groupId: string): Promise<{}> {
+    const response = await this.request<{ lightGroupList: any[] }>(
+      "get",
+      `/api/bmsapi/groups/${groupId}`,
+    );
+    return response || {};
+  }
+
+  async recallScene(groupId: string, sceneNr: number): Promise<{}> {
+    const response = await this.request<{ lightGroupList: any[] }>(
+      "put",
+      `/api/bmsapi/groups/${groupId}/state`,
+      { sceneNr },
+    );
+    return response || {};
+  }
+
+  async getGroupState(groupId: string): Promise<{}> {
+    const response = await this.request<{ lightGroupList: any[] }>(
+      "get",
+      `/api/bmsapi/groups/${groupId}/state`,
+    );
+    return response || {};
+  }
+  async checkHealth(): Promise<{
+    status: "healthy" | "unhealthy";
+    message: string;
+  }> {
     try {
       // Try to get devices list as a simple connectivity check
       await this.getDevices();
-      return { 
-        status: 'healthy', 
-        message: `Connected to controller ${this.config.name}` 
+      return {
+        status: "healthy",
+        message: `Connected to controller ${this.config.name}`,
       };
     } catch (error: any) {
-      return { 
-        status: 'unhealthy', 
-        message: `Controller ${this.config.name} unreachable: ${error.message || 'Unknown error'}` 
+      return {
+        status: "unhealthy",
+        message: `Controller ${this.config.name} unreachable: ${error.message || "Unknown error"}`,
       };
     }
   }

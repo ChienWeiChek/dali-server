@@ -27,17 +27,20 @@ import useSWR from "swr";
 import { apiFetch } from "../lib/apiClient";
 
 // Types
-import type { DashboardMetrics, ChartData } from "../types/dashboard";
+import type { DashboardMetrics, ChartData, Device } from "../types/dashboard";
 import { useDevices } from "../hooks/useDevices";
 
 const DeviceCard = () => {
-  const { devices, loading } = useDevices();
-
+  const { devices, liveDevices, loading } = useDevices();
+  const liveCount = Object.values(liveDevices as Record<string, Device[]>).reduce(
+    (sum: number, deviceList: Device[]) => sum + deviceList.length,
+    0,
+  );
   return (
     <StatCard
-      title="Total Devices"
+      title="Live/Total Devices"
       loading={loading}
-      value={devices.length}
+      value={`${liveCount}/${devices.length}`}
       icon={<DevicesIcon fontSize="large" />}
       color="#1976d2"
     />

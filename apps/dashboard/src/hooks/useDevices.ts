@@ -1,36 +1,30 @@
-import { useState, useEffect } from 'react';
-import { apiFetch } from '../lib/apiClient';
+import useSWR from "swr";
+import { apiFetch } from "../lib/apiClient";
 
-interface Device {
-  guid: string;
-  title: string;
-  zones?: string[];
-}
+/**
+ * Fetcher function for SWR — must return the resolved data.
+ */
+const fetcher = async (url: string) => {
+  const response = await apiFetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url} — ${response.statusText}`);
+  }
+  return response.json();
+};
 
 export function useDevices() {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading, mutate } = useSWR("/api/devices", fetcher, {
+    // Optional configuration
+    revalidateOnFocus: true, // auto refresh when tab refocuses
+    dedupingInterval: 10000, // avoid refetching within 10s
+    refreshInterval: 30000, // auto refetch every 30 seconds
+  });
 
-  useEffect(() => {
-    const fetchDevices = async () => {
-      try {
-        setLoading(true);
-        const response = await apiFetch('/api/devices');
-        const data = await response.json();
-        console.log("🚀 ~ fetchDevices ~ data:", data)
-        setDevices(data.devices);
-        setError(null);
-      } catch (err: any) {
-        console.error('Failed to fetch devices:', err);
-        setError(err.message || 'Failed to fetch devices');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDevices();
-  }, []);
-
-  return { devices, loading, error };
+  return {
+    devices: data?.devices ?? [],
+    liveDevices: data?.liveDevices ?? {},
+    loading: isLoading,
+    error: error ? error.message : null,
+    mutate, // Expose mutate to allow manual refresh from components
+  };
 }
