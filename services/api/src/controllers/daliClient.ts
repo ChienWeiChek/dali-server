@@ -114,12 +114,21 @@ export class DaliClient {
   }
 
   async getGroupState(groupId: string): Promise<{}> {
-    const response = await this.request<{ lightGroupList: any[] }>(
+    const response = await this.request(
       "get",
       `/api/bmsapi/groups/${groupId}/state`,
     );
     return response || {};
   }
+
+  async getError(): Promise<{}> {
+    const response = await this.request<{ deviceList: any[] }>(
+      "get",
+      `/api/bmsapi/dali-devices/error`,
+    );
+    return response.deviceList || {};
+  }
+
   async checkHealth(): Promise<{
     status: "healthy" | "unhealthy";
     message: string;

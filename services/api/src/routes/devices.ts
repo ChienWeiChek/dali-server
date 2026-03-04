@@ -89,7 +89,7 @@ export default async function deviceRoutes(
             return device;
           }
         } catch (error) {
-          console.log("🚀 ~ deviceRoutes ~ error:", error)
+          console.log("🚀 ~ deviceRoutes ~ error:", error);
           // Continue searching in other clients
         }
       }
@@ -97,6 +97,18 @@ export default async function deviceRoutes(
       return reply.code(404).send({ error: "Device not found" });
     },
   );
+  fastify.get("/api/devices/error", async (request: any, reply) => {
+    let errorDevice: Record<string, any> = {};
+    try {
+      for (const client of daliClients) {
+        const devices = await client.getError();
+        errorDevice[client.getConfig().name] = devices;
+      }
+      return errorDevice;
+    } catch (error) {
+      return reply.code(404).send({ error: "Device not found" });
+    }
+  });
 }
 
 function validateTag(value: string, label: string): string {

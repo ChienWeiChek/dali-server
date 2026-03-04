@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Container,
   Grid,
@@ -32,10 +33,9 @@ import { useDevices } from "../hooks/useDevices";
 
 const DeviceCard = () => {
   const { devices, liveDevices, loading } = useDevices();
-  const liveCount = Object.values(liveDevices as Record<string, Device[]>).reduce(
-    (sum: number, deviceList: Device[]) => sum + deviceList.length,
-    0,
-  );
+  const liveCount = Object.values(
+    liveDevices as Record<string, Device[]>,
+  ).reduce((sum: number, deviceList: Device[]) => sum + deviceList.length, 0);
   return (
     <StatCard
       title="Live/Total Devices"
@@ -88,6 +88,34 @@ const DriverTemperatureCard = () => {
       unit={data?.unit || "°C"}
       icon={<DeviceThermostat fontSize="large" />}
       color="#2e7d32"
+    />
+  );
+};
+
+const ErrorDeviceCard = () => {
+  const navigate = useNavigate();
+  const { data, error, isLoading } = useSWR(`/api/devices/error`, async () => {
+    const res = await apiFetch(`/api/devices/error`);
+    return res.ok
+      ? res.json()
+      : Promise.reject(new Error("Failed to fetch device errors"));
+  });
+  const errorDeviceCount: number = data
+    ? Object.values(data as Record<string, Device[]>).reduce(
+        (total, devices) => total + devices.length,
+        0,
+      )
+    : 0;
+  console.log("🚀 ~ ErrorDeviceCard ~ errorDeviceCount:", errorDeviceCount);
+  return (
+    <StatCard
+      title="Devices with Errors"
+      loading={isLoading}
+      value={errorDeviceCount}
+      unit={""}
+      icon={<ErrorIcon fontSize="large" />}
+      color={errorDeviceCount > 0 ? "#d32f2f" : "#2e7d32"}
+      onClick={() => navigate("/errors")}
     />
   );
 };
@@ -306,12 +334,7 @@ export default function Dashboard() {
           <EnergySummaryCard />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          {/* <StatCard
-            title="Active Errors"
-            value={metrics.activeErrors}
-            icon={<ErrorIcon fontSize="large" />}
-            color={metrics.activeErrors > 0 ? "#d32f2f" : "#2e7d32"}
-          /> */}
+          <ErrorDeviceCard />
         </Grid>
       </Grid>
 

@@ -12,6 +12,7 @@ interface StatCardProps {
   };
   color?: string;
   loading?: boolean;
+  onClick?: () => void;
 }
 
 export default function StatCard({
@@ -21,14 +22,17 @@ export default function StatCard({
   icon,
   trend,
   color,
-  loading
+  loading,
+  onClick
 }: StatCardProps) {
   return (
     <Card
+      onClick={onClick}
       sx={{
         height: '100%',
         bgcolor: color ? `${color}10` : 'background.paper',
         transition: 'transform 0.2s, box-shadow 0.2s',
+        cursor: onClick ? 'pointer' : 'default',
         '&:hover': {
           transform: 'translateY(-4px)',
           boxShadow: 4

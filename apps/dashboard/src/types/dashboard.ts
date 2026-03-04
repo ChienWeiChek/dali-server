@@ -2,10 +2,17 @@ export interface Device {
   guid: string;
   title: string;
   type: string;
+  class?: string;
   shortAddress: number;
+  port?: number;
+  zone?: string;
   zones?: string[];
   properties?: string[];
+  gtin?: string;
+  serial?: string;
   error?: boolean;
+  errorBits?: number;
+  errors?: string[];
 }
 
 export interface DashboardMetrics {
