@@ -1,11 +1,39 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router";
+import {
+  Container,
+  Paper,
+  Typography,
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  CircularProgress,
+  Alert,
+  Button,
+  Chip,
+  Divider,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+} from "@mui/material";
+import {
+  Groups as GroupsIcon,
+  Lightbulb as LightbulbIcon,
+  Info as InfoIcon,
+  Tune as TuneIcon,
+  TheaterComedy as TheaterComedyIcon,
+  PlayArrow as PlayArrowIcon,
+  Refresh as RefreshIcon,
+  Check as CheckIcon,
+} from "@mui/icons-material";
 import { apiFetch } from "../lib/apiClient";
 import { useToast } from "../components/ToastProvider";
 import LevelControl from "../components/LevelControl";
 import TemperatureControl from "../components/TemperatureControl";
 import RGBControl from "../components/RGBControl";
 import RGBWControl from "../components/RGBWControl";
-import { useParams } from "react-router";
 
 type Scene = {
   title: string;
@@ -74,7 +102,7 @@ export default function GroupsPage() {
       }
     };
     fetchGroups();
-  }, []);
+  }, [controller]);
 
   const fetchGroupDetails = async (groupId: number) => {
     try {
@@ -233,188 +261,407 @@ export default function GroupsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen text-gray-600">
-        Loading groups...
-      </div>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+          <CircularProgress />
+        </Box>
+      </Container>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen text-red-600">
-        {error}
-      </div>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Alert severity="error">
+          {error}
+        </Alert>
+      </Container>
     );
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <h1 className="text-3xl font-semibold mb-4 text-gray-800">
-        {controller} Light Groups
-      </h1>
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white rounded shadow p-4 flex flex-col">
-          <h2 className="text-lg font-bold mb-3 text-gray-800">
-            Available Groups
-          </h2>
-          <div className="flex-1 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
-            {groups.map((group) => (
-              <button
-                key={group.groupId}
-                className={`w-full text-left p-3 border-b hover:bg-gray-100 ${
-                  selectedGroup?.groupId === group.groupId ? "bg-gray-100" : ""
-                }`}
-                onClick={() => fetchGroupDetails(group.groupId)}
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Header */}
+      <Box mb={4}>
+        <Box display="flex" alignItems="center" gap={2} mb={2}>
+          <GroupsIcon sx={{ fontSize: 40, color: "#1976d2" }} />
+          <Box>
+            <Typography variant="h4" component="h1" gutterBottom>
+              {controller} Light Groups
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Control and manage light groups
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Summary Card */}
+        <Card sx={{ bgcolor: "#1976d210" }}>
+          <CardContent>
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <GroupsIcon color="primary" />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Groups
+                    </Typography>
+                    <Typography variant="h5" color="primary">
+                      {groups.length}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <LightbulbIcon color="primary" />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Selected Group
+                    </Typography>
+                    <Typography variant="h6">
+                      {selectedGroup ? selectedGroup.title : "None"}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* Content Grid */}
+      <Grid container spacing={3}>
+        {/* Available Groups List */}
+        <Grid item xs={12} md={5}>
+          <Card sx={{ height: "100%" }}>
+            <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              <Box display="flex" alignItems="center" gap={1} mb={3}>
+                <GroupsIcon color="primary" />
+                <Typography variant="h6">
+                  Available Groups
+                </Typography>
+                <Chip
+                  label={groups.length}
+                  size="small"
+                  color="primary"
+                />
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <Box
+                sx={{
+                  flex: 1,
+                  maxHeight: "calc(100vh - 400px)",
+                  overflowY: "auto",
+                }}
               >
-                <p className="font-semibold text-gray-800">{group.title}</p>
-                <p className="text-sm text-gray-500">Type: {group.colorType}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {selectedGroup && (
-          <div className="bg-white rounded shadow p-4 flex flex-col">
-            <h2 className="text-lg font-bold mb-2 text-gray-800">
-              {selectedGroup.title}
-            </h2>
-
-            {groupState && (
-              <div className="mb-4 text-sm text-gray-700">
-                <p>
-                  <strong>Light State:</strong>{" "}
-                  {groupState.lightState ? "On" : "Off"}
-                </p>
-                {groupState.level !== undefined && (
-                  <p>
-                    <strong>Level:</strong> {groupState.level}%
-                  </p>
+                {groups.length === 0 ? (
+                  <Paper
+                    sx={{
+                      p: 4,
+                      textAlign: "center",
+                      bgcolor: "#f5f5f5",
+                    }}
+                  >
+                    <GroupsIcon sx={{ fontSize: 60, color: "#9e9e9e", mb: 2 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      No groups available
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <List disablePadding>
+                    {groups.map((group) => (
+                      <ListItem
+                        key={group.groupId}
+                        disablePadding
+                        sx={{
+                          borderBottom: "1px solid #e0e0e0",
+                          "&:last-child": { borderBottom: "none" },
+                        }}
+                      >
+                        <ListItemButton
+                          selected={selectedGroup?.groupId === group.groupId}
+                          onClick={() => fetchGroupDetails(group.groupId)}
+                          sx={{
+                            "&.Mui-selected": {
+                              bgcolor: "#1976d210",
+                              "&:hover": {
+                                bgcolor: "#1976d220",
+                              },
+                            },
+                          }}
+                        >
+                          <Box display="flex" alignItems="center" gap={1} mr={2}>
+                            <LightbulbIcon
+                              sx={{
+                                color: selectedGroup?.groupId === group.groupId
+                                  ? "#1976d2"
+                                  : "#9e9e9e",
+                              }}
+                            />
+                          </Box>
+                          <ListItemText
+                            primary={group.title}
+                            secondary={`Type: ${group.colorType}`}
+                            primaryTypographyProps={{
+                              fontWeight: selectedGroup?.groupId === group.groupId
+                                ? "bold"
+                                : "normal",
+                            }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
                 )}
-                {groupState.scene && (
-                  <p>
-                    <strong>Scene:</strong> {groupState.scene}
-                  </p>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Group Details and Controls */}
+        <Grid item xs={12} md={7}>
+          {!selectedGroup ? (
+            <Paper sx={{ p: 6, textAlign: "center" }}>
+              <GroupsIcon sx={{ fontSize: 80, color: "#9e9e9e", mb: 2 }} />
+              <Typography variant="h5" gutterBottom>
+                No Group Selected
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Select a group from the list to view details and controls
+              </Typography>
+            </Paper>
+          ) : (
+            <Card>
+              <CardContent>
+                {/* Group Header */}
+                <Box display="flex" alignItems="center" gap={1} mb={3}>
+                  <LightbulbIcon color="primary" />
+                  <Typography variant="h6">
+                    {selectedGroup.title}
+                  </Typography>
+                  <Chip
+                    label={selectedGroup.colorType}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  />
+                </Box>
+                <Divider sx={{ mb: 3 }} />
+
+                {/* Current State */}
+                {groupState && (
+                  <Card sx={{ mb: 3, bgcolor: "#f5f5f5" }}>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" gap={1} mb={2}>
+                        <InfoIcon color="action" />
+                        <Typography variant="subtitle1" fontWeight="medium">
+                          Current State
+                        </Typography>
+                      </Box>
+                      <Grid container spacing={2}>
+                        <Grid item xs={6} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Light State
+                          </Typography>
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Chip
+                              label={groupState.lightState ? "On" : "Off"}
+                              size="small"
+                              color={groupState.lightState ? "success" : "default"}
+                            />
+                          </Box>
+                        </Grid>
+                        {groupState.level !== undefined && (
+                          <Grid item xs={6} sm={4}>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Level
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {groupState.level}%
+                            </Typography>
+                          </Grid>
+                        )}
+                        {groupState.scene && (
+                          <Grid item xs={6} sm={4}>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Active Scene
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {groupState.scene}
+                            </Typography>
+                          </Grid>
+                        )}
+                        {groupState.twKelvin && (
+                          <Grid item xs={6} sm={4}>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Color Temperature
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {groupState.twKelvin} K
+                            </Typography>
+                          </Grid>
+                        )}
+                        {groupState.rgb !== undefined && (
+                          <Grid item xs={12} sm={8}>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              RGB Values
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              R:{groupState.red} G:{groupState.green} B:{groupState.blue}
+                            </Typography>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </CardContent>
+                  </Card>
                 )}
-                {groupState.twKelvin && (
-                  <p>
-                    <strong>Color Temp:</strong> {groupState.twKelvin} K
-                  </p>
-                )}
-                {groupState.rgb && (
-                  <p>
-                    <strong>RGB:</strong> R:{groupState.red} G:
-                    {groupState.green} B:{groupState.blue}
-                  </p>
-                )}
-              </div>
-            )}
 
-            {selectedGroup.scenes && selectedGroup.scenes.length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-semibold mb-2 text-gray-700">Scenes</h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedGroup.scenes.map((scene) => (
-                    <button
-                      key={scene.sceneNr}
-                      onClick={() =>
-                        recallScene(selectedGroup.groupId, scene.sceneNr)
-                      }
-                      className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                    >
-                      {scene.title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Custom Controls Section */}
-            {groupState && editingState && (
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="font-semibold mb-4 text-gray-700">
-                  Custom Controls
-                </h3>
-
-                <div className="space-y-6">
-                  {/* Level Control - Always visible */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <LevelControl
-                      level={editingState.level}
-                      onChange={handleLevelChange}
-                      disabled={isApplying}
-                    />
-                  </div>
-
-                  {/* Color Type Specific Controls */}
-                  {selectedGroup.colorType === "tw" && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <TemperatureControl
-                        kelvin={editingState.twKelvin}
-                        mired={editingState.twMired}
-                        onChange={handleTemperatureChange}
-                        disabled={isApplying}
+                {/* Scenes */}
+                {selectedGroup.scenes && selectedGroup.scenes.length > 0 && (
+                  <Box mb={3}>
+                    <Box display="flex" alignItems="center" gap={1} mb={2}>
+                      <TheaterComedyIcon color="primary" />
+                      <Typography variant="subtitle1" fontWeight="medium">
+                        Scenes
+                      </Typography>
+                      <Chip
+                        label={selectedGroup.scenes.length}
+                        size="small"
+                        variant="outlined"
                       />
-                    </div>
-                  )}
+                    </Box>
+                    <Box display="flex" flexWrap="wrap" gap={1}>
+                      {selectedGroup.scenes.map((scene) => (
+                        <Button
+                          key={scene.sceneNr}
+                          variant="contained"
+                          startIcon={<PlayArrowIcon />}
+                          onClick={() =>
+                            recallScene(selectedGroup.groupId, scene.sceneNr)
+                          }
+                          sx={{
+                            bgcolor: groupState?.sceneNr === scene.sceneNr
+                              ? "#2e7d32"
+                              : "#1976d2",
+                            "&:hover": {
+                              bgcolor: groupState?.sceneNr === scene.sceneNr
+                                ? "#1b5e20"
+                                : "#1565c0",
+                            },
+                          }}
+                        >
+                          {scene.title}
+                        </Button>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
 
-                  {selectedGroup.colorType === "rgb" && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <RGBControl
-                        red={editingState.red}
-                        green={editingState.green}
-                        blue={editingState.blue}
-                        onChange={handleRGBChange}
-                        disabled={isApplying}
-                      />
-                    </div>
-                  )}
+                {/* Custom Controls Section */}
+                {groupState && editingState && (
+                  <Box>
+                    <Divider sx={{ mb: 3 }} />
+                    <Box display="flex" alignItems="center" gap={1} mb={3}>
+                      <TuneIcon color="primary" />
+                      <Typography variant="subtitle1" fontWeight="medium">
+                        Custom Controls
+                      </Typography>
+                    </Box>
 
-                  {selectedGroup.colorType === "rgbw" && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <RGBWControl
-                        red={editingState.red}
-                        green={editingState.green}
-                        blue={editingState.blue}
-                        white={editingState.white}
-                        onChange={handleRGBWChange}
-                        disabled={isApplying}
-                      />
-                    </div>
-                  )}
+                    <Box display="flex" flexDirection="column" gap={3}>
+                      {/* Level Control - Always visible */}
+                      <Card variant="outlined">
+                        <CardContent>
+                          <LevelControl
+                            level={editingState.level}
+                            onChange={handleLevelChange}
+                            disabled={isApplying}
+                          />
+                        </CardContent>
+                      </Card>
 
-                  {/* Apply/Cancel Buttons */}
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={updateGroupState}
-                      disabled={isApplying}
-                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
-                    >
-                      {isApplying ? "Applying..." : "Apply Custom Values"}
-                    </button>
-                    <button
-                      onClick={resetEditingState}
-                      disabled={isApplying}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed"
-                    >
-                      Reset
-                    </button>
-                  </div>
+                      {/* Color Type Specific Controls */}
+                      {selectedGroup.colorType === "tw" && (
+                        <Card variant="outlined">
+                          <CardContent>
+                            <TemperatureControl
+                              kelvin={editingState.twKelvin}
+                              mired={editingState.twMired}
+                              onChange={handleTemperatureChange}
+                              disabled={isApplying}
+                            />
+                          </CardContent>
+                        </Card>
+                      )}
 
-                  <div className="text-sm text-gray-500">
-                    <p>
-                      Note: Changes are only sent to the device when you click
-                      "Apply Custom Values".
-                    </p>
-                    <p className="mt-1">
-                      Scenes will override custom values when recalled.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+                      {selectedGroup.colorType === "rgb" && (
+                        <Card variant="outlined">
+                          <CardContent>
+                            <RGBControl
+                              red={editingState.red}
+                              green={editingState.green}
+                              blue={editingState.blue}
+                              onChange={handleRGBChange}
+                              disabled={isApplying}
+                            />
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {selectedGroup.colorType === "rgbw" && (
+                        <Card variant="outlined">
+                          <CardContent>
+                            <RGBWControl
+                              red={editingState.red}
+                              green={editingState.green}
+                              blue={editingState.blue}
+                              white={editingState.white}
+                              onChange={handleRGBWChange}
+                              disabled={isApplying}
+                            />
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Apply/Cancel Buttons */}
+                      <Box display="flex" gap={2}>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          startIcon={isApplying ? <CircularProgress size={20} /> : <CheckIcon />}
+                          onClick={updateGroupState}
+                          disabled={isApplying}
+                          fullWidth
+                        >
+                          {isApplying ? "Applying..." : "Apply Custom Values"}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          startIcon={<RefreshIcon />}
+                          onClick={resetEditingState}
+                          disabled={isApplying}
+                        >
+                          Reset
+                        </Button>
+                      </Box>
+
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        <Typography variant="caption" display="block">
+                          Changes are only sent to the device when you click "Apply Custom Values".
+                        </Typography>
+                        <Typography variant="caption" display="block">
+                          Scenes will override custom values when recalled.
+                        </Typography>
+                      </Alert>
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </Grid>
+      </Grid>
+    </Container>
   );
 }

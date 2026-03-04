@@ -106,7 +106,6 @@ const ErrorDeviceCard = () => {
         0,
       )
     : 0;
-  console.log("🚀 ~ ErrorDeviceCard ~ errorDeviceCount:", errorDeviceCount);
   return (
     <StatCard
       title="Devices with Errors"
