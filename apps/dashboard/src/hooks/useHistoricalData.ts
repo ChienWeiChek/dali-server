@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { apiFetch } from '../lib/apiClient';
+import { useState, useEffect } from "react";
+import { apiFetch } from "../lib/apiClient";
 
 interface HistoricalDataPoint {
   timestamp: string;
@@ -7,9 +7,10 @@ interface HistoricalDataPoint {
 }
 
 export function useHistoricalData(
+  controller: string,
   deviceGuid: string | null,
   property: string,
-  timeRange: string
+  timeRange: string,
 ) {
   const [data, setData] = useState<HistoricalDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,14 +26,14 @@ export function useHistoricalData(
       try {
         setLoading(true);
         const response = await apiFetch(
-          `/api/devices/${deviceGuid}/history?property=${property}&range=${timeRange}`
+          `/api/devices/${controller}/${deviceGuid}/history?property=${property}&range=${timeRange}`,
         );
         const result = await response.json();
         setData(result);
         setError(null);
       } catch (err: any) {
-        console.error('Failed to fetch historical data:', err);
-        setError(err.message || 'Failed to fetch historical data');
+        console.error("Failed to fetch historical data:", err);
+        setError(err.message || "Failed to fetch historical data");
       } finally {
         setLoading(false);
       }
