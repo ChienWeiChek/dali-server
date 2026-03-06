@@ -10,9 +10,7 @@ export async function apiFetch(
 
   const finalUrl = endpoint.startsWith("http")
     ? endpoint
-    : `http://${controllerIp}${
-        endpoint.startsWith("/") ? endpoint : "/" + endpoint
-      }`;
+    : `${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
 
   const response = await fetch(finalUrl, { ...options, headers });
 
