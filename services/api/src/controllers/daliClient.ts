@@ -1,5 +1,12 @@
 import axios, { AxiosInstance } from "axios";
 import { ControllerConfig } from "../types/config.js";
+import {
+  ControllerInfo,
+  MqttStatus,
+  MqttSettings,
+  ProfileList,
+  ProfileData,
+} from "../types/mqtt.js";
 
 export class DaliClient {
   private axiosInstance: AxiosInstance;
@@ -146,6 +153,69 @@ export class DaliClient {
         message: `Controller ${this.config.name} unreachable: ${error.message || "Unknown error"}`,
       };
     }
+  }
+
+  // MQTT-related methods
+
+  async getControllerInfo(): Promise<ControllerInfo> {
+    return this.request<ControllerInfo>(
+      "get",
+      "/api/bmsapi/application-controller/info",
+    );
+  }
+
+  async getMqttStatus(): Promise<MqttStatus> {
+    return this.request<MqttStatus>("get", "/api/bmsapi/mqtt-interface");
+  }
+
+  async updateMqttSettings(settings: MqttSettings): Promise<void> {
+    return this.request<void>("put", "/api/bmsapi/mqtt-interface", settings);
+  }
+
+  async getProfiles(): Promise<ProfileList> {
+    return this.request<ProfileList>(
+      "get",
+      "/api/bmsapi/property-scheduler-profiles/data",
+    );
+  }
+
+  async getProfileDetail(profileName: string): Promise<ProfileData> {
+    return this.request<ProfileData>(
+      "get",
+      `/api/bmsapi/property-scheduler-profiles/data/${encodeURIComponent(profileName)}`,
+    );
+  }
+
+  async updateProfile(
+    profileName: string,
+    data: ProfileData,
+  ): Promise<void> {
+    return this.request<void>(
+      "put",
+      `/api/bmsapi/property-scheduler-profiles/data/${encodeURIComponent(profileName)}`,
+      data,
+    );
+  }
+
+  async getActiveProfiles(): Promise<ProfileList> {
+    return this.request<ProfileList>(
+      "get",
+      "/api/bmsapi/property-scheduler-profiles/active",
+    );
+  }
+
+  async activateProfile(profileName: string): Promise<void> {
+    return this.request<void>(
+      "put",
+      `/api/bmsapi/property-scheduler-profiles/active/${encodeURIComponent(profileName)}`,
+    );
+  }
+
+  async deactivateProfile(profileName: string): Promise<void> {
+    return this.request<void>(
+      "delete",
+      `/api/bmsapi/property-scheduler-profiles/active/${encodeURIComponent(profileName)}`,
+    );
   }
 
   getConfig(): ControllerConfig {

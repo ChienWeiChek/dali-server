@@ -19,6 +19,7 @@ export default function Header() {
     { name: "Devices", href: "/devices" },
     { name: "Groups", href: "/groups" },
     { name: "Errors", href: "/errors" },
+    { name: "Settings", href: "/settings" },
   ];
 
   const groupsSubMenu = [
