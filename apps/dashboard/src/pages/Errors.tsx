@@ -259,10 +259,10 @@ export default function Errors() {
 
                           <Box>
                             <Typography variant="caption" color="text.secondary" display="block" mb={1}>
-                              Errors ({device.errors.length}):
+                              Errors ({device.errors?.length}):
                             </Typography>
                             <Box display="flex" flexWrap="wrap" gap={0.5}>
-                              {device.errors.map((error, index) => (
+                              {device.errors?.map((error, index) => (
                                 <Chip
                                   key={index}
                                   label={getErrorLabel(error)}

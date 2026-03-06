@@ -2,7 +2,7 @@ export async function apiFetch(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  const controllerIp = "localhost:3000";
+  const controllerIp = "localhost";
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...(options.headers || {}),

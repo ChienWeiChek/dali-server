@@ -1,43 +1,50 @@
 services:
-  # nginx:
-  #   image: nginx:alpine
-  #   restart: unless-stopped
-  #   ports:
-  #     - "80:80"
-  #   volumes:
-  #     - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-  #   depends_on:
-  #     - api
-  #     - web
-  #   networks:
-  #     - dali-net
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - web
+    networks:
+      - dali-net
 
-  # api:
-  #   build:
-  #     context: ..
-  #     dockerfile: services/api/Dockerfile
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ../.env
-  #   environment:
-  #     - PORT=3000
-  #     - INFLUX_URL=http://influxdb2:8086
-  #     - CONTROLLER_CONFIG_PATH=/app/config/controllers.json
-  #     - AUTH_CONFIG_PATH=/app/config/auth.json
-  #   depends_on:
-  #     - influxdb2
-  #   networks:
-  #     - dali-net
-  #   volumes:
-  #     - ../config:/app/config:ro
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      - INFLUX_USERNAME=admin
+      - INFLUX_PASSWORD=changeme
+      - INFLUX_ORG=dali
+      - INFLUX_BUCKET=dali_devices
+      - INFLUX_TOKEN=dali-dev-token
+      - MQTT_USERNAME=${MQTT_USERNAME:-admin}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-admin123}
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - MQTT_TOPIC=DALI-PRO-IoT/#
+      - PORT=3000
+      - INFLUX_URL=http://influxdb2:8086
+      - CONTROLLER_CONFIG_PATH=/app/config/controllers.json
+      - AUTH_CONFIG_PATH=/app/config/auth.json
+    depends_on:
+      - influxdb2
+    networks:
+      - dali-net
+    volumes:
+      - ../config:/app/config:ro
 
-  # web:
-  #   build:
-  #     context: ..
-  #     dockerfile: apps/dashboard/Dockerfile
-  #   restart: unless-stopped
-  #   networks:
-  #     - dali-net
+  web:
+    build:
+      context: ..
+      dockerfile: apps/dashboard/Dockerfile
+    restart: unless-stopped
+    networks:
+      - dali-net
 
   mosquitto:
     image: eclipse-mosquitto:2

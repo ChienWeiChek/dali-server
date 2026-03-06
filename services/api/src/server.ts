@@ -35,7 +35,7 @@ const start = async () => {
       influxWriter,
       clients,
     );
-    // mqttSubscriber.connect();
+    mqttSubscriber.connect();
 
     await fastify.register(cors);
     // await fastify.register(websocket);

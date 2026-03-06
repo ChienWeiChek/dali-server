@@ -39,7 +39,7 @@ export interface ProfileItem {
 }
 
 export interface ProfileData {
-  profileItems: ProfileItem[];
+  profilItems: ProfileItem[];
 }
 
 export interface ProfileListResponse {

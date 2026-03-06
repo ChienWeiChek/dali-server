@@ -1,4 +1,4 @@
-'use client';
+
 
 import RGBControl from './RGBControl';
 

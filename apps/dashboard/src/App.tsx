@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Group from "./pages/Group";
 import Errors from "./pages/Errors";
 import Settings from "./pages/Settings";
+import HealthCheck from "./pages/HealthCheck";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import ClientLayout from "./components/ClientLayout";
 
@@ -34,6 +35,7 @@ function App() {
             <Route path="/groups/:controller" element={<Group/>} />
             <Route path="/errors" element={<Errors />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/health" element={<HealthCheck />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -218,6 +218,13 @@ export class DaliClient {
     );
   }
 
+  async deleteProfile(profileName: string): Promise<void> {
+    return this.request<void>(
+      "delete",
+      `/api/bmsapi/property-scheduler-profiles/data/${encodeURIComponent(profileName)}`,
+    );
+  }
+
   getConfig(): ControllerConfig {
     return this.config;
   }

@@ -1,4 +1,4 @@
-'use client';
+
 import ReactECharts from 'echarts-for-react';
 
 interface PieChartProps {

@@ -3,6 +3,7 @@ import { useDevices } from "../hooks/useDevices";
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router";
 import { NavLink } from "react-router-dom";
+import HealthIndicator from "./HealthIndicator";
 
 export default function Header() {
   const { pathname } = useLocation();
@@ -57,17 +58,22 @@ export default function Header() {
     <header className="bg-white shadow-md border-b border-gray-200 fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo/Brand */}
-          <div className="flex items-center">
-            <div className="shrink-0">
-              <div className="h-8 w-8 bg-blue-600 rounded-md flex items-center justify-center">
-                <span className="text-white font-bold text-sm">D</span>
+          {/* Logo/Brand and Health Indicator */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              <div className="shrink-0">
+                <div className="h-8 w-8 bg-blue-600 rounded-md flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">D</span>
+                </div>
+              </div>
+              <div className="ml-3">
+                <h1 className="text-xl font-bold text-gray-800">DALI IoT</h1>
+                <p className="text-xs text-gray-500">Light Control System</p>
               </div>
             </div>
-            <div className="ml-3">
-              <h1 className="text-xl font-bold text-gray-800">DALI IoT</h1>
-              <p className="text-xs text-gray-500">Light Control System</p>
-            </div>
+            
+            {/* Health Indicator - visible on all screen sizes */}
+            <HealthIndicator />
           </div>
 
           {/* Desktop Navigation */}

@@ -155,6 +155,7 @@ export default async function mqttRoutes(
     "/api/mqtt/:controller/profiles/:profileName/activate",
     async (request: any, reply) => {
       const { controller, profileName } = request.params;
+      console.log("🚀 ~ mqttRoutes ~ profileName:", profileName)
       const client = findClient(controller);
 
       if (!client) {
@@ -178,6 +179,7 @@ export default async function mqttRoutes(
     "/api/mqtt/:controller/profiles/:profileName/activate",
     async (request: any, reply) => {
       const { controller, profileName } = request.params;
+      console.log("🚀 ~ mqttRoutes ~ profileName:", profileName)
       const client = findClient(controller);
 
       if (!client) {
@@ -192,6 +194,29 @@ export default async function mqttRoutes(
         return reply
           .code(500)
           .send({ error: error.message || "Failed to deactivate profile" });
+      }
+    },
+  );
+
+  // Delete profile
+  fastify.delete(
+    "/api/mqtt/:controller/profiles/:profileName",
+    async (request: any, reply) => {
+      const { controller, profileName } = request.params;
+      const client = findClient(controller);
+
+      if (!client) {
+        return reply.code(404).send({ error: "Controller not found" });
+      }
+
+      try {
+        await client.deleteProfile(profileName);
+        return { success: true, message: "Profile deleted successfully" };
+      } catch (error: any) {
+        request.log.error({ err: error }, "Error deleting profile");
+        return reply
+          .code(500)
+          .send({ error: error.message || "Failed to delete profile" });
       }
     },
   );

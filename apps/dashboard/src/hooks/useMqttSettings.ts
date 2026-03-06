@@ -121,6 +121,7 @@ export async function activateProfile(
     `/api/mqtt/${controller}/profiles/${profileName}/activate`,
     {
       method: "PUT",
+      body: JSON.stringify({}),
     },
   );
 
@@ -141,12 +142,33 @@ export async function deactivateProfile(
     `/api/mqtt/${controller}/profiles/${profileName}/activate`,
     {
       method: "DELETE",
+      body: JSON.stringify({}),
     },
   );
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || "Failed to deactivate profile");
+  }
+
+  return response.json();
+}
+
+// Helper function to delete profile
+export async function deleteProfile(
+  controller: string,
+  profileName: string,
+) {
+  const response = await apiFetch(
+    `/api/mqtt/${controller}/profiles/${profileName}`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to delete profile");
   }
 
   return response.json();

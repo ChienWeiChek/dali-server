@@ -33,25 +33,31 @@ interface ProfileEditorProps {
   controller: string;
   profileName: string;
   open: boolean;
+  isCreating?: boolean;
   onClose: () => void;
 }
 
 export default function ProfileEditor({
   controller,
-  profileName,
+  profileName: initialProfileName,
   open,
+  isCreating = false,
   onClose,
 }: ProfileEditorProps) {
-  const { profile, loading } = useProfileDetail(controller, profileName);
+  const { profile, loading } = useProfileDetail(
+    controller,
+    isCreating ? null : initialProfileName,
+  );
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [profileName, setProfileName] = useState(initialProfileName);
   const [items, setItems] = useState<ProfileItem[]>([]);
   const [newProperty, setNewProperty] = useState("");
   const [newInterval, setNewInterval] = useState("60");
 
   useEffect(() => {
     if (profile) {
-      setItems(profile.profileItems || []);
+      setItems(profile.profilItems || []);
     }
   }, [profile]);
 
@@ -92,6 +98,22 @@ export default function ProfileEditor({
   };
 
   const handleSave = async () => {
+    // Validate profile name for new profiles
+    if (isCreating) {
+      if (!profileName || profileName.trim() === "") {
+        showToast("Profile name is required", "error");
+        return;
+      }
+      // Validate profile name format (alphanumeric, dash, underscore)
+      if (!/^[a-zA-Z0-9_-]+$/.test(profileName)) {
+        showToast(
+          "Profile name can only contain letters, numbers, dashes, and underscores",
+          "error",
+        );
+        return;
+      }
+    }
+
     if (items.length === 0) {
       showToast("Profile must have at least one property", "error");
       return;
@@ -99,8 +121,13 @@ export default function ProfileEditor({
 
     setSaving(true);
     try {
-      await updateProfile(controller, profileName, { profileItems: items });
-      showToast("Profile updated successfully", "success");
+      await updateProfile(controller, profileName, { profilItems: items });
+      showToast(
+        isCreating
+          ? "Profile created successfully"
+          : "Profile updated successfully",
+        "success",
+      );
       onClose();
     } catch (error: any) {
       showToast(error.message || "Failed to update profile", "error");
@@ -116,9 +143,11 @@ export default function ProfileEditor({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Edit Profile: {profileName}</DialogTitle>
+      <DialogTitle>
+        {isCreating ? "Create New Profile" : `Edit Profile: ${profileName}`}
+      </DialogTitle>
       <DialogContent>
-        {loading ? (
+        {loading && !isCreating ? (
           <Box display="flex" justifyContent="center" p={3}>
             <CircularProgress />
           </Box>
@@ -129,7 +158,14 @@ export default function ProfileEditor({
                 fullWidth
                 label="Profile Name"
                 value={profileName}
-                disabled
+                onChange={(e) => setProfileName(e.target.value)}
+                disabled={!isCreating}
+                required={isCreating}
+                helperText={
+                  isCreating
+                    ? "Use only letters, numbers, dashes, and underscores"
+                    : ""
+                }
                 sx={{ mb: 2 }}
               />
             </Box>
@@ -224,8 +260,13 @@ export default function ProfileEditor({
                   onClick={handleAddItem}
                   startIcon={<AddIcon />}
                   disabled={availableProperties.length === 0}
+                  sx={{
+                    "& .MuiButton-startIcon": {
+                      display: { xs: "flex", sm: "none" },
+                      mr: 0,
+                    },
+                  }}
                 >
-                  Add
                 </Button>
               </Box>
               {availableProperties.length === 0 && (
@@ -244,10 +285,14 @@ export default function ProfileEditor({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={saving || loading}
+          disabled={saving || (loading && !isCreating)}
           startIcon={saving && <CircularProgress size={20} />}
         >
-          {saving ? "Saving..." : "Save Profile"}
+          {saving
+            ? "Saving..."
+            : isCreating
+              ? "Create Profile"
+              : "Save Profile"}
         </Button>
       </DialogActions>
     </Dialog>

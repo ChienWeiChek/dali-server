@@ -46,7 +46,7 @@ export async function loadConfig(): Promise<AppConfig> {
       brokerUrl: process.env.MQTT_BROKER_URL || 'mqtt://mosquitto:1883',
       username: process.env.MQTT_USERNAME || 'admin',
       password: process.env.MQTT_PASSWORD || 'admin123',
-      topic: process.env.MQTT_TOPIC || 'DALI-PRO-IoT/+/devices/+/+/data/#',
+      topic: process.env.MQTT_TOPIC || 'DALI-PRO-IoT/#',
     },
     server: {
       port: parseInt(process.env.API_PORT || '3000', 10),
