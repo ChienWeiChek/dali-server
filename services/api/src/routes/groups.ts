@@ -84,13 +84,13 @@ export default async function groupsRoutes(
     "/api/groups/:controller/:groupId/state",
     async (request: any, reply) => {
       const { controller, groupId } = request.params;
-      const { scene } = request.body;
+      const { sceneNr, ...payload } = request.body;
 
       // Default behavior: Try to find device in all DALI clients
       for (const client of daliClients) {
         if (client.getConfig().name !== controller) continue; // Skip clients that don't match the controller in the URL
         try {
-          const groups = await client.recallScene(groupId, scene);
+          const groups = await client.recallScene(groupId, sceneNr, payload);
           if (groups) {
             return groups;
           }
@@ -101,7 +101,7 @@ export default async function groupsRoutes(
       }
 
       return reply.code(500).send({
-        error: `${controller} groups ${groupId} set-> ${scene} error`,
+        error: `${controller} groups ${groupId} set-> ${sceneNr} error`,
       });
     },
   );

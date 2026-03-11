@@ -199,7 +199,7 @@ export default function GroupsPage() {
         // For 'nothing' colorType, only level is sent
       }
 
-      await apiFetch(`/api/bmsapi/groups/${selectedGroup.groupId}/state`, {
+      await apiFetch(`api/groups/${controller}/${selectedGroup.groupId}/state`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });

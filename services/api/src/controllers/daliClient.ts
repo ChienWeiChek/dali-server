@@ -111,11 +111,15 @@ export class DaliClient {
     return response || {};
   }
 
-  async recallScene(groupId: string, sceneNr: number): Promise<{}> {
+  async recallScene(
+    groupId: string,
+    sceneNr: number,
+    payload: Record<string, any>,
+  ): Promise<{}> {
     const response = await this.request<{ lightGroupList: any[] }>(
       "put",
       `/api/bmsapi/groups/${groupId}/state`,
-      { sceneNr },
+      { sceneNr, ...payload },
     );
     return response || {};
   }
@@ -186,10 +190,7 @@ export class DaliClient {
     );
   }
 
-  async updateProfile(
-    profileName: string,
-    data: ProfileData,
-  ): Promise<void> {
+  async updateProfile(profileName: string, data: ProfileData): Promise<void> {
     return this.request<void>(
       "put",
       `/api/bmsapi/property-scheduler-profiles/data/${encodeURIComponent(profileName)}`,
