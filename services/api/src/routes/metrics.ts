@@ -228,10 +228,12 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         return {
           avg:
             rows.length > 0
-              ? (rows.reduce(
-                  (acc: number, row: any) => acc + (row._value || 0),
-                  0,
-                ) / rows.length).toFixed(2)
+              ? (
+                  rows.reduce(
+                    (acc: number, row: any) => acc + (row._value || 0),
+                    0,
+                  ) / rows.length
+                ).toFixed(2)
               : 0,
           unit: "°C",
           controller: rows.map((row: any) => ({
@@ -255,7 +257,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
       request: FastifyRequest<{ Querystring: { ["type[]"]?: string[] } }>,
       reply,
     ) => {
-      const type = request.query["type[]"]; 
+      const type = request.query["type[]"];
       // Normalize to array
       const types = Array.isArray(type) ? type : type ? [type] : [];
 
@@ -301,4 +303,133 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Historical data for all devices - temperature, voltage, power
+  fastify.get(
+    "/api/devices/history/aggregate",
+    async (
+      request: FastifyRequest<{
+        Querystring: { property?: string; range?: string };
+      }>,
+      reply,
+    ) => {
+      const { property = "driverTemperature", range = "24h" } = request.query;
+
+      // Validate property
+      const validProperties = [
+        "driverTemperature",
+        "driverInputVoltage",
+        "driverInputPower",
+        "driverEnergyConsumption",
+      ];
+      if (!validProperties.includes(property)) {
+        return reply.code(400).send({
+          error: `Invalid property. Must be one of: ${validProperties.join(", ")}`,
+        });
+      }
+
+      // Validate range
+      const validRange = /^[0-9]+(s|m|h|d|w)$/i.test(range) ? range : "24h";
+
+      try {
+        const query = `
+          from(bucket: "${config.influx.bucket}")
+            |> range(start: -${validRange})
+            |> filter(fn: (r) => r._measurement == "dali_property")
+            |> filter(fn: (r) => r.property == "${property}")
+            |> filter(fn: (r) => r._field == "value_num")
+            |> group(columns: ["_time"])
+            |> mean()
+            |> keep(columns: ["_time", "_value"])
+            |> sort(columns: ["_time"])
+        `;
+
+        const rows = await queryApi.collectRows<{
+          _time: string;
+          _value: number;
+        }>(query);
+
+        return rows.map((row) => ({
+          time: row._time,
+          value: row._value,
+        }));
+      } catch (err) {
+        fastify.log.error(err);
+        return reply
+          .code(500)
+          .send({ error: "Failed to fetch historical data" });
+      }
+    },
+  );
+
+  // Energy consumption by device
+  fastify.get("/api/devices/energy-by-device", async (request: any, reply) => {
+    try {
+      const query = `
+          from(bucket: "${config.influx.bucket}")
+            |> range(start: -30d)
+            |> filter(fn: (r) => r._measurement == "dali_property" 
+                    and r.property == "driverEnergyConsumption" 
+                    and r._field == "value_num" 
+                    and r.title != "Unknown")
+            |> group(columns: ["device_guid", "controller", "title"])
+            |> last()
+            |> keep(columns: ["device_guid", "controller", "title", "_value"])
+            |> map(fn: (r) => ({
+              r with
+              _value: float(v: r._value) / 1000.0
+            }))
+        `;
+
+      const rows = await queryApi.collectRows<{
+        device_guid: string;
+        controller: string;
+        title?: string;
+        _value: number;
+      }>(query);
+
+      return rows
+        .map((row) => ({
+          name: row.title
+            ? `${row.controller} - ${row.title}`
+            : `${row.controller} - ${row.device_guid.substring(0, 8)}`,
+          value: Number(row._value.toFixed(2)),
+          unit: "kwh"
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+    } catch (err) {
+      fastify.log.error(err);
+      return reply
+        .code(500)
+        .send({ error: "Failed to fetch energy by device" });
+    }
+  });
+
+  // Devices by zone
+  fastify.get("/api/devices/by-zone", async (request: any, reply) => {
+    try {
+      const query = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -30d)
+          |> filter(fn: (r) => r._measurement == "dali_property")
+          |> group(columns: ["device_guid", "zone"])
+          |> distinct(column: "device_guid")
+          |> group(columns: ["zone"])
+          |> count()
+      `;
+
+      const rows = await queryApi.collectRows<{
+        zone?: string;
+        _value: number;
+      }>(query);
+
+      return rows.map((row) => ({
+        name: row.zone || "Unassigned",
+        value: row._value,
+      }));
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch devices by zone" });
+    }
+  });
 }

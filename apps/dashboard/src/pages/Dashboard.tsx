@@ -19,7 +19,6 @@ import {
 import StatCard from "../components/StatCard";
 import TimeRangeSelector from "../components/TimeRangeSelector";
 import BarChart from "../components/charts/BarChart";
-import PieChart from "../components/charts/PieChart";
 import AreaChart from "../components/charts/AreaChart";
 import RealTimeGauge from "../components/charts/RealTimeGauge";
 import HistoryChart from "../components/charts/HistoryChart";
@@ -199,79 +198,96 @@ export default function Dashboard() {
     energyByDevice: [],
     devicesByZone: [],
     powerTrend: [],
+    voltageTrend: [],
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // useEffect(() => {
-  //   const devicesByZone = devices.reduce(
-  //     (acc: Record<string, number>, device) => {
-  //       const zone = device.zones?.length ? device.zones[0] : "Unassigned";
-  //       acc[zone] = (acc[zone] || 0) + 1;
-  //       return acc;
-  //     },
-  //     {},
-  //   );
+  // Fetch energy by device
+  useEffect(() => {
+    const fetchEnergyByDevice = async () => {
+      try {
+        const res = await apiFetch("/api/devices/energy-by-device");
+        if (res.ok) {
+          const data = await res.json();
+          setChartData((prev) => ({
+            ...prev,
+            energyByDevice: data,
+          }));
+        }
+      } catch (err: any) {
+        console.error("Error fetching energy by device:", err);
+      }
+    };
 
-  //   setChartData((prev) => ({
-  //     ...prev,
-  //     devicesByZone: Object.entries(devicesByZone).map(([name, value]) => ({
-  //       name,
-  //       value,
-  //     })),
-  //   }));
-  // }, [devices]);
+    fetchEnergyByDevice();
+  }, []);
 
   // Fetch historical data for trend charts
-  // useEffect(() => {
-  //   const fetchHistoricalData = async () => {
-  //     if (devices.length === 0) return;
+  useEffect(() => {
+    const fetchHistoricalData = async () => {
+      try {
+        // Fetch driver temperature trend
+        const tempRes = await apiFetch(
+          `/api/devices/history/aggregate?property=driverTemperature&range=${timeRange}`,
+        );
+        if (tempRes.ok) {
+          const tempData = await tempRes.json();
+          setChartData((prev) => ({
+            ...prev,
+            lightLevelTrend: tempData.map((d: any) => ({
+              time: new Date(d.time).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              value: d.value || 0,
+            })),
+          }));
+        }
 
-  //     const firstDevice = devices[0];
-  //     try {
-  //       // Fetch light level trend
-  //       const lightRes = await apiFetch(
-  //         `/api/devices/${firstDevice.guid}/history?property=lightLevel&range=${timeRange}`,
-  //       );
-  //       if (lightRes.ok) {
-  //         const lightData = await lightRes.json();
-  //         setChartData((prev) => ({
-  //           ...prev,
-  //           lightLevelTrend: lightData.map((d: any) => ({
-  //             time: new Date(d._time).toLocaleTimeString("en-US", {
-  //               hour: "2-digit",
-  //               minute: "2-digit",
-  //             }),
-  //             value: d.value_num || 0,
-  //           })),
-  //         }));
-  //       }
+        // Fetch power trend
+        const powerRes = await apiFetch(
+          `/api/devices/history/aggregate?property=driverInputPower&range=${timeRange}`,
+        );
+        if (powerRes.ok) {
+          const powerData = await powerRes.json();
+          setChartData((prev) => ({
+            ...prev,
+            powerTrend: powerData.map((d: any) => ({
+              time: new Date(d.time).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              value: d.value || 0,
+            })),
+          }));
+        }
 
-  //       // Fetch power trend
-  //       const powerRes = await apiFetch(
-  //         `/api/devices/${firstDevice.guid}/history?property=driverInputPower&range=${timeRange}`,
-  //       );
-  //       if (powerRes.ok) {
-  //         const powerData = await powerRes.json();
-  //         setChartData((prev) => ({
-  //           ...prev,
-  //           powerTrend: powerData.map((d: any) => ({
-  //             time: new Date(d._time).toLocaleTimeString("en-US", {
-  //               hour: "2-digit",
-  //               minute: "2-digit",
-  //             }),
-  //             value: d.value_num || 0,
-  //           })),
-  //         }));
-  //       }
-  //     } catch (err: any) {
-  //       console.error("Error fetching historical data:", err);
-  //     }
-  //   };
+        // Fetch voltage trend
+        const voltageRes = await apiFetch(
+          `/api/devices/history/aggregate?property=driverInputVoltage&range=${timeRange}`,
+        );
+        if (voltageRes.ok) {
+          const voltageData = await voltageRes.json();
+          setChartData((prev) => ({
+            ...prev,
+            voltageTrend: voltageData.map((d: any) => ({
+              time: new Date(d.time).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              value: d.value || 0,
+            })),
+          }));
+        }
+      } catch (err: any) {
+        console.error("Error fetching historical data:", err);
+      }
+    };
 
-  //   fetchHistoricalData();
-  // }, [devices, timeRange]);
+    fetchHistoricalData();
+  }, [timeRange]);
 
   // Loading state
   if (loading) {
@@ -343,45 +359,50 @@ export default function Dashboard() {
           <Paper sx={{ p: 2 }}>
             <HistoryChart
               data={chartData.lightLevelTrend}
-              title={`Light Level Trends (${timeRange})`}
+              title={`Driver Temperature Trend - All Devices (${timeRange})`}
               color="#5470C6"
+              unit="°C"
             />
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Charts Row 2 - Bar and Pie */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <BarChart
-              data={chartData.energyByDevice}
-              title="Energy Consumption by Device"
-              color="#91cc75"
-              height="350px"
-            />
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <PieChart
-              data={chartData.devicesByZone}
-              title="Devices by Zone"
-              showLegend={true}
-            />
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Charts Row 3 - Area Chart */}
+      {/* Charts Row 2 - Energy Consumption Bar Chart */}
       <Grid container spacing={3} mb={3}>
         <Grid item xs={12}>
           <Paper sx={{ p: 2 }}>
+            <BarChart
+              data={chartData.energyByDevice}
+              title="Top 10 Energy Consumption by Device"
+              color="#91cc75"
+              height="350px"
+              unit="kWh"
+            />
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Charts Row 3 - Power and Voltage Charts */}
+      <Grid container spacing={3} mb={3}>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
             <AreaChart
               data={chartData.powerTrend}
-              title={`Power Consumption Trend (${timeRange})`}
+              title={`Driver Input Power Trend (${timeRange})`}
               color="#ee6666"
               gradient={true}
+              unit="W"
+            />
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <AreaChart
+              data={chartData.voltageTrend}
+              title={`Driver Input Voltage Trend (${timeRange})`}
+              color="#fac858"
+              gradient={true}
+              unit="V"
             />
           </Paper>
         </Grid>

@@ -8,6 +8,7 @@ interface BarChartProps {
   horizontal?: boolean;
   height?: string;
   showValues?: boolean;
+  unit?: string;
 }
 
 export default function BarChart({
@@ -16,7 +17,8 @@ export default function BarChart({
   color = '#91cc75',
   horizontal = false,
   height = '350px',
-  showValues = false
+  showValues = false,
+  unit = ''
 }: BarChartProps) {
   const option = {
     title: {
@@ -28,6 +30,10 @@ export default function BarChart({
       trigger: 'axis',
       axisPointer: {
         type: 'shadow'
+      },
+      formatter: (params: any) => {
+        const param = params[0];
+        return `${param.name}<br/>${param.value} ${unit}`;
       }
     },
     grid: {
@@ -46,7 +52,10 @@ export default function BarChart({
     },
     yAxis: {
       type: horizontal ? 'category' : 'value',
-      data: horizontal ? data.map(d => d.name) : undefined
+      data: horizontal ? data.map(d => d.name) : undefined,
+      name: unit,
+      nameLocation: 'middle',
+      nameGap: 50
     },
     series: [
       {
@@ -58,7 +67,7 @@ export default function BarChart({
         label: {
           show: showValues,
           position: horizontal ? 'right' : 'top',
-          formatter: '{c}'
+          formatter: `{c} ${unit}`
         },
         barMaxWidth: 50
       }

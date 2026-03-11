@@ -8,6 +8,7 @@ interface AreaChartProps {
   gradient?: boolean;
   height?: string;
   smooth?: boolean;
+  unit?: string;
 }
 
 export default function AreaChart({
@@ -16,7 +17,8 @@ export default function AreaChart({
   color = '#ee6666',
   gradient = true,
   height = '350px',
-  smooth = true
+  smooth = true,
+  unit = ''
 }: AreaChartProps) {
   const areaStyle = gradient
     ? {
@@ -44,6 +46,10 @@ export default function AreaChart({
       trigger: 'axis',
       axisPointer: {
         type: 'cross'
+      },
+      formatter: (params: any) => {
+        const param = params[0];
+        return `${param.name}<br/>${param.value} ${unit}`;
       }
     },
     grid: {
@@ -58,7 +64,10 @@ export default function AreaChart({
       data: data.map(d => d.time)
     },
     yAxis: {
-      type: 'value'
+      type: 'value',
+      name: unit,
+      nameLocation: 'middle',
+      nameGap: 50
     },
     series: [
       {

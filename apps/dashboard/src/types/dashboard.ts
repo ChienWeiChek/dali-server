@@ -30,6 +30,7 @@ export interface ChartData {
   energyByDevice: { name: string; value: number }[];
   devicesByZone: { name: string; value: number }[];
   powerTrend: { time: string; value: number }[];
+  voltageTrend: { time: string; value: number }[];
 }
 
 export interface RealTimeMetrics {
