@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   Container,
@@ -44,6 +44,91 @@ type DeviceDetail = {
   properties: string[];
 };
 
+// Configuration types
+type ChartConfig = {
+  property: string;
+  title: string;
+  unit: string;
+  color: string;
+  yAxisName: string;
+  tooltipLabel: string;
+  valueFormatter?: (value: number) => string;
+};
+
+type CardConfig = {
+  property: string;
+  title: string;
+  unit: string;
+  icon: JSX.Element;
+  color: string;
+  valueFormatter?: (value: any) => string | number;
+};
+
+// UI Configuration - Easy to modify what shows in charts and cards
+const UI_CONFIG = {
+  // Properties to show as historical charts
+  chartData: [
+    {
+      property: "driverInputPower",
+      title: "Driver Input Power",
+      unit: "W",
+      color: "#8884d8",
+      yAxisName: "Power (W)",
+      tooltipLabel: "Power",
+      valueFormatter: (value: number) => value.toFixed(2),
+    },
+    {
+      property: "driverInputVoltage",
+      title: "Driver Input Voltage",
+      unit: "V",
+      color: "#82ca9d",
+      yAxisName: "Voltage (V)",
+      tooltipLabel: "Voltage",
+      valueFormatter: (value: number) => value.toFixed(2),
+    },
+    {
+      property: "driverTemperature",
+      title: "Driver Temperature",
+      unit: "°C",
+      color: "#ff9800",
+      yAxisName: "Temperature (°C)",
+      tooltipLabel: "Temperature",
+      valueFormatter: (value: number) => value.toFixed(1),
+    },
+  ] as ChartConfig[],
+
+  // Properties to show as stat cards
+  cardData: [
+    {
+      property: "driverTemperature",
+      title: "Driver Temperature",
+      unit: "°C",
+      icon: <ThermostatIcon />,
+      color: "#ff9800",
+      valueFormatter: (value: any) =>
+        typeof value === "number" ? value.toFixed(1) : value,
+    },
+    {
+      property: "driverEnergyConsumption",
+      title: "Energy Consumption",
+      unit: "kWh",
+      icon: <BatteryIcon />,
+      color: "#4caf50",
+      valueFormatter: (value: any) =>
+        typeof value === "number" ? (value / 1000).toFixed(2) : value,
+    },
+    {
+      property: "driverOperationTime",
+      title: "Operation Time",
+      unit: "",
+      icon: <TimeIcon />,
+      color: "#2196f3",
+      valueFormatter: (value: any) =>
+        typeof value === "number" ? formatSecondsToText(value) : value,
+    },
+  ] as CardConfig[],
+};
+
 export default function DeviceDetailPage() {
   const { guid, controller } = useParams();
   if (!guid || !controller) return <>404</>;
@@ -53,75 +138,68 @@ export default function DeviceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("24h");
 
-  // Check which properties are supported
-  const hasDriverInputPower = device?.properties.includes("driverInputPower");
-  const hasDriverInputVoltage =
-    device?.properties.includes("driverInputVoltage");
-  const hasDriverTemperature = device?.properties.includes("driverTemperature");
-  const hasDriverEnergyConsumption = device?.properties.includes(
-    "driverEnergyConsumption",
-  );
-  const hasDriverOperationTime = device?.properties.includes(
-    "driverOperationTime",
+  // Filter configs based on available device properties
+  const availableCharts = useMemo(
+    () =>
+      UI_CONFIG.chartData.filter((chart) =>
+        device?.properties.includes(chart.property),
+      ),
+    [device?.properties],
   );
 
-  // Fetch historical data for charts
-  const { data: powerData } = useHistoricalData(
-    controller,
-    hasDriverInputPower ? guid || null : null,
-    "driverInputPower",
-    timeRange,
+  const availableCards = useMemo(
+    () =>
+      UI_CONFIG.cardData.filter((card) =>
+        device?.properties.includes(card.property),
+      ),
+    [device?.properties],
   );
-  const { data: voltageData } = useHistoricalData(
-    controller,
-    hasDriverInputVoltage ? guid || null : null,
-    "driverInputVoltage",
-    timeRange,
-  );
-  const { data: temperatureData } = useHistoricalData(
-    controller,
-    hasDriverTemperature ? guid || null : null,
-    "driverTemperature",
-    timeRange,
-  );
+
+  // Fetch historical data for all chart properties (always call hooks in same order)
+  const chartDataHooks = UI_CONFIG.chartData.map((chart) => {
+    const hasProperty = device?.properties.includes(chart.property);
+    return {
+      property: chart.property,
+      data: useHistoricalData(
+        controller,
+        hasProperty ? guid || null : null,
+        chart.property,
+        timeRange,
+      ).data,
+    };
+  });
+
+  // Create a map of property -> data for easy lookup
+  const chartDataMap = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    chartDataHooks.forEach((hook) => {
+      map[hook.property] = hook.data;
+    });
+    return map;
+  }, [chartDataHooks]);
 
   // Fetch current values for stat cards directly from controller
   const [currentData, setCurrentData] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    if (!device || !guid || !controller) return;
+    if (!device || !guid || !controller || availableCards.length === 0) return;
 
     const fetchCurrentData = async () => {
       const data: Record<string, any> = {};
 
       try {
-        if (hasDriverTemperature) {
-          const res = await apiFetch(
-            `/api/devices/${controller}/${guid}/driverTemperature`,
-          );
-          if (res.ok) {
-            const result = await res.json();
-            data.driverTemperature = result.value;
-          }
-        }
-        if (hasDriverEnergyConsumption) {
-          const res = await apiFetch(
-            `/api/devices/${controller}/${guid}/driverEnergyConsumption`,
-          );
-          if (res.ok) {
-            const result = await res.json();
-            data.driverEnergyConsumption = result.value;
-          }
-        }
-        if (hasDriverOperationTime) {
-          const res = await apiFetch(
-            `/api/devices/${controller}/${guid}/driverOperationTime`,
-          );
-          if (res.ok) {
-            const result = await res.json();
-            data.driverOperationTime = result.value;
-          }
-        }
+        // Fetch data for all configured card properties
+        await Promise.all(
+          availableCards.map(async (card) => {
+            const res = await apiFetch(
+              `/api/devices/${controller}/${guid}/${card.property}`,
+            );
+            if (res.ok) {
+              const result = await res.json();
+              data[card.property] = result.value;
+            }
+          }),
+        );
         setCurrentData(data);
       } catch (err) {
         console.error("Failed to fetch current data:", err);
@@ -131,14 +209,7 @@ export default function DeviceDetailPage() {
     fetchCurrentData();
     const interval = setInterval(fetchCurrentData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
-  }, [
-    device,
-    guid,
-    controller,
-    hasDriverTemperature,
-    hasDriverEnergyConsumption,
-    hasDriverOperationTime,
-  ]);
+  }, [device, guid, controller, availableCards]);
 
   useEffect(() => {
     const fetchDeviceDetails = async () => {
@@ -232,87 +303,37 @@ export default function DeviceDetailPage() {
         </Box>
       </Box>
 
-      {/* Current Stats Cards */}
-      {(hasDriverTemperature ||
-        hasDriverEnergyConsumption ||
-        hasDriverOperationTime) && (
+      {/* Current Stats Cards - Dynamically rendered from config */}
+      {availableCards.length > 0 && (
         <Box mb={4}>
           <Typography variant="h5" gutterBottom mb={2}>
             Current Status
           </Typography>
           <Grid container spacing={3}>
-            {hasDriverTemperature && (
-              <Grid item xs={12} md={4}>
+            {availableCards.map((card) => (
+              <Grid item xs={12} md={4} key={card.property}>
                 <StatCard
-                  title="Driver Temperature"
+                  title={card.title}
                   value={
-                    currentData.driverTemperature !== undefined
-                      ? typeof currentData.driverTemperature === "number"
-                        ? currentData.driverTemperature.toFixed(1)
-                        : currentData.driverTemperature
+                    currentData[card.property] !== undefined
+                      ? card.valueFormatter
+                        ? card.valueFormatter(currentData[card.property])
+                        : currentData[card.property]
                       : "N/A"
                   }
-                  unit="°C"
-                  icon={<ThermostatIcon />}
-                  color="#ff9800"
-                  loading={
-                    currentData.driverTemperature !== undefined ? false : true
-                  }
+                  unit={card.unit}
+                  icon={card.icon}
+                  color={card.color}
+                  loading={currentData[card.property] === undefined}
                 />
               </Grid>
-            )}
-            {hasDriverEnergyConsumption && (
-              <Grid item xs={12} md={4}>
-                <StatCard
-                  title="Energy Consumption"
-                  value={
-                    currentData.driverEnergyConsumption !== undefined
-                      ? typeof currentData.driverEnergyConsumption === "number"
-                        ? (currentData.driverEnergyConsumption / 1000).toFixed(
-                            2,
-                          )
-                        : currentData.driverEnergyConsumption
-                      : "N/A"
-                  }
-                  unit="kWh"
-                  icon={<BatteryIcon />}
-                  color="#4caf50"
-                  loading={
-                    currentData.driverEnergyConsumption !== undefined
-                      ? false
-                      : true
-                  }
-                />
-              </Grid>
-            )}
-            {hasDriverOperationTime && (
-              <Grid item xs={12} md={4}>
-                <StatCard
-                  title="Operation Time"
-                  value={
-                    currentData.driverOperationTime !== undefined
-                      ? typeof currentData.driverOperationTime === "number"
-                        ? formatSecondsToText(currentData.driverOperationTime)
-                        : currentData.driverOperationTime
-                      : "N/A"
-                  }
-                  unit="hrs"
-                  icon={<TimeIcon />}
-                  color="#2196f3"
-                  loading={
-                    currentData.driverOperationTime !== undefined ? false : true
-                  }
-                />
-              </Grid>
-            )}
+            ))}
           </Grid>
         </Box>
       )}
 
-      {/* Charts Section */}
-      {(hasDriverInputPower ||
-        hasDriverInputVoltage ||
-        hasDriverTemperature) && (
+      {/* Charts Section - Dynamically rendered from config */}
+      {availableCharts.length > 0 && (
         <Box mb={4}>
           <Box
             display="flex"
@@ -324,138 +345,57 @@ export default function DeviceDetailPage() {
             <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           </Box>
           <Grid container spacing={3}>
-            {hasDriverInputPower && (
-              <Grid item xs={12} lg={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Driver Input Power
-                    </Typography>
-                                        <ReactECharts
-                      option={{
-                        tooltip: {
-                          trigger: "axis",
-                          formatter: (params: any) => {
-                            const data = params[0];
-                            return `${new Date(data.name).toLocaleString()}<br/>Power: ${data.value.toFixed(2)} W`;
+            {availableCharts.map((chart) => {
+              const data = chartDataMap[chart.property] || [];
+              return (
+                <Grid item xs={12} lg={6} key={chart.property}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        {chart.title}
+                      </Typography>
+                      <ReactECharts
+                        option={{
+                          tooltip: {
+                            trigger: "axis",
+                            formatter: (params: any) => {
+                              const dataPoint = params[0];
+                              const formattedValue = chart.valueFormatter
+                                ? chart.valueFormatter(dataPoint.value)
+                                : dataPoint.value;
+                              return `${new Date(dataPoint.name).toLocaleString()}<br/>${chart.tooltipLabel}: ${formattedValue} ${chart.unit}`;
+                            },
                           },
-                        },
-                        xAxis: {
-                          type: "category",
-                          data: powerData.map((d: any) => d._time),
-                          axisLabel: {
-                            formatter: (value: string) => new Date(value).toLocaleTimeString(),
+                          xAxis: {
+                            type: "category",
+                            data: data.map((d: any) => d._time),
+                            axisLabel: {
+                              formatter: (value: string) =>
+                                new Date(value).toLocaleTimeString(),
+                            },
                           },
-                        },
-                        yAxis: {
-                          type: "value",
-                          name: "Power (W)",
-                        },
-                        series: [
-                          {
-                            name: "Power",
-                            type: "line",
-                            data: powerData.map((d: any) => d.value_num),
-                            smooth: true,
-                            itemStyle: { color: "#8884d8" },
+                          yAxis: {
+                            type: "value",
+                            name: chart.yAxisName,
                           },
-                        ],
-                        grid: { left: "10%", right: "5%", bottom: "15%" },
-                      }}
-                      style={{ height: "300px" }}
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-            {hasDriverInputVoltage && (
-              <Grid item xs={12} lg={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Driver Input Voltage
-                    </Typography>
-                                        <ReactECharts
-                      option={{
-                        tooltip: {
-                          trigger: "axis",
-                          formatter: (params: any) => {
-                            const data = params[0];
-                            return `${new Date(data.name).toLocaleString()}<br/>Voltage: ${data.value.toFixed(2)} V`;
-                          },
-                        },
-                        xAxis: {
-                          type: "category",
-                          data: voltageData.map((d: any) => d._time),
-                          axisLabel: {
-                            formatter: (value: string) => new Date(value).toLocaleTimeString(),
-                          },
-                        },
-                        yAxis: {
-                          type: "value",
-                          name: "Voltage (V)",
-                        },
-                        series: [
-                          {
-                            name: "Voltage",
-                            type: "line",
-                            data: voltageData.map((d: any) => d.value_num),
-                            smooth: true,
-                            itemStyle: { color: "#82ca9d" },
-                          },
-                        ],
-                        grid: { left: "10%", right: "5%", bottom: "15%" },
-                      }}
-                      style={{ height: "300px" }}
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-            {hasDriverTemperature && (
-              <Grid item xs={12} lg={6}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Driver Temperature
-                    </Typography>
-                                        <ReactECharts
-                      option={{
-                        tooltip: {
-                          trigger: "axis",
-                          formatter: (params: any) => {
-                            const data = params[0];
-                            return `${new Date(data.name).toLocaleString()}<br/>Temperature: ${data.value.toFixed(1)} °C`;
-                          },
-                        },
-                        xAxis: {
-                          type: "category",
-                          data: temperatureData.map((d: any) => d._time),
-                          axisLabel: {
-                            formatter: (value: string) => new Date(value).toLocaleTimeString(),
-                          },
-                        },
-                        yAxis: {
-                          type: "value",
-                          name: "Temperature (°C)",
-                        },
-                        series: [
-                          {
-                            name: "Temperature",
-                            type: "line",
-                            data: temperatureData.map((d: any) => d.value_num),
-                            smooth: true,
-                            itemStyle: { color: "#ff9800" },
-                          },
-                        ],
-                        grid: { left: "10%", right: "5%", bottom: "15%" },
-                      }}
-                      style={{ height: "300px" }}
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
+                          series: [
+                            {
+                              name: chart.title,
+                              type: "line",
+                              data: data.map((d: any) => d.value_num),
+                              smooth: true,
+                              itemStyle: { color: chart.color },
+                            },
+                          ],
+                          grid: { left: "10%", right: "5%", bottom: "15%" },
+                        }}
+                        style={{ height: "300px" }}
+                      />
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
           </Grid>
         </Box>
       )}

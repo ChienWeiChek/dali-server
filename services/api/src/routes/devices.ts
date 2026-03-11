@@ -34,14 +34,40 @@ export default async function deviceRoutes(
       const rows = await queryApi.collectRows<{ _value: string }>(fluxQuery);
 
       let liveDevices: Record<string, any> = {};
+
+      // Try to get live devices from each controller
       for (const client of daliClients) {
-        const devices = await client.getDevices();
-        liveDevices[client.getConfig().name] = devices.filter(
-          (item) =>
-            item.type === "gear" ||
-            item.type === "lightSensor" ||
-            item.type === "motionSensor",
-        ); // all live devices;
+        const controllerName = client.getConfig().name;
+        try {
+          const devices = await client.getDevices();
+          liveDevices[controllerName] = devices.filter(
+            (item) =>
+              item.type === "gear" ||
+              item.type === "lightSensor" ||
+              item.type === "motionSensor",
+          ); // all live devices;
+        } catch (error) {
+          const controllerUserName = client.getConfig().username;
+
+          console.log(
+            `🚀 ~ getting live device from controller ${controllerUserName} ~ error:`,
+            error,
+          );
+
+          // Fallback: use database devices for this controller
+          const dbDevicesForController = rows
+            .filter((row) => row._value.startsWith(`${controllerUserName}_`))
+            .map((row) => ({
+              guid: row._value.split("_")[1], // Extract device_guid from combined_id
+              controller: controllerUserName,
+              source: "database", // Mark as coming from database
+            }));
+
+          liveDevices[controllerUserName] = dbDevicesForController;
+          console.log(
+            `🚀 ~ fallback to database devices for controller ${controllerUserName}, found ${dbDevicesForController.length} devices`,
+          );
+        }
       }
 
       return {
@@ -114,6 +140,7 @@ export default async function deviceRoutes(
 function validateTag(value: string, label: string): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9:_\-]+$/.test(value)) {
     throw new Error(`Invalid ${label}`);
+    console.log("🚀 ~ validateTag ~ Error:", Error);
   }
   return value;
 }

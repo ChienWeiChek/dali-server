@@ -177,3 +177,42 @@ export function formatSecondsToText(seconds: number): string {
   if (secs || parts.length === 0) parts.push(`${secs}s`);
   return parts.join(" ");
 }
+
+// Error bit map definitions based on DALI specification
+type ErrorBit = {
+  bit: number;
+  name: string;
+  description: string;
+  severity: "error" | "warning" | "info";
+};
+
+const ERROR_BIT_MAP: ErrorBit[] = [
+  { bit: 0, name: "Device Missing", description: "Device is missing", severity: "error" },
+  { bit: 1, name: "Control Gear Error", description: "Device error", severity: "error" },
+  { bit: 2, name: "Lamp Error", description: "Lamp error", severity: "error" },
+  { bit: 3, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 4, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 5, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 6, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 7, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 8, name: "Detailed Error Info", description: "Device error, the device supports detailed error information", severity: "info" },
+  { bit: 9, name: "Undervoltage", description: "Line power undervoltage detected", severity: "warning" },
+  { bit: 10, name: "Overvoltage", description: "Line power overvoltage detected", severity: "warning" },
+  { bit: 11, name: "Output Power Limit", description: "The output power will be limited", severity: "warning" },
+  { bit: 12, name: "Thermal Derating", description: "The light is reduced due to overheating", severity: "warning" },
+  { bit: 13, name: "Thermal Shutdown", description: "The light is switched off due to overheating", severity: "error" },
+  { bit: 14, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 15, name: "Reserved", description: "Reserved", severity: "info" },
+  { bit: 16, name: "Detailed Lamp Info", description: "Lamp error, the device supports detailed error information", severity: "info" },
+];
+
+// Parse error bits from a number value
+export function parseErrorBits(errorValue: number): ErrorBit[] {
+  const activeErrors: ErrorBit[] = [];
+  ERROR_BIT_MAP.forEach((errorBit) => {
+    if (errorValue & (1 << errorBit.bit)) {
+      activeErrors.push(errorBit);
+    }
+  });
+  return activeErrors;
+}

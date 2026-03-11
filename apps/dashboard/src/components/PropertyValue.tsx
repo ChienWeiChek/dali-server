@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
+import { parseErrorBits } from "../utils/dataTransform";
 
 type PropertyData = {
   guid: string;
@@ -75,7 +76,31 @@ export default function PropertyValue({
     <div className="border-b py-2 text-sm text-gray-700 flex justify-between">
       <span className="font-semibold">{property}</span>
       <span>
-        {data.value} {data.unit || ""}
+        {property === "errorBits" ? (
+          <div className="flex flex-col gap-1">
+            {parseErrorBits(data.value).length > 0 ? (
+              parseErrorBits(data.value).map((error, idx) => (
+                <span
+                  key={idx}
+                  className={`text-xs px-2 py-1 rounded ${
+                    error.severity === "error"
+                      ? "bg-red-100 text-red-800"
+                      : error.severity === "warning"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-blue-100 text-blue-800"
+                  }`}
+                  title={error.description}
+                >
+                  {error.name}
+                </span>
+              ))
+            ) : (
+              <span className="text-green-600">No errors</span>
+            )}
+          </div>
+        ) : (
+          `${data.value} ${data.unit || ""}`
+        )}
       </span>
     </div>
   );
