@@ -1,0 +1,153 @@
+[
+  {
+    "apiVersion": "influxdata.com/v2alpha1",
+    "kind": "Dashboard",
+    "metadata": { "name": "nostalgic-leakey-a17001" },
+    "spec": {
+      "charts": [
+        {
+          "colors": [
+            { "id": "base", "name": "laser", "type": "text", "hex": "#00C9FF" }
+          ],
+          "decimalPlaces": 2,
+          "height": 3,
+          "kind": "Single_Stat",
+          "name": "Driver Operation Time",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"dali_property\" and r.title == v.joce_device_title)\n  |> group(columns: [\"device_guid\", \"title\", \"property\"])\n  |> filter(fn: (r) => r[\"property\"] == \"driverOperationTime\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"device_guid\", \"title\", \"property\", \"_value\", \"unit\", \"_time\"])\n  |> last()\n  |> map(fn: (r) => {\n    // Convert float _value to integer seconds\n    seconds = int(v: r._value)\n\n    // Define constants\n    secondsPerYear = 365 * 24 * 3600   // 31,536,000\n    secondsPerDay  = 24 * 3600         // 86,400\n    secondsPerHour = 3600\n    secondsPerMin  = 60\n\n    // Calculate components\n    years  = seconds / secondsPerYear\n    days   = (seconds % secondsPerYear) / secondsPerDay\n    hours  = (seconds % secondsPerDay) / secondsPerHour\n    minutes = (seconds % secondsPerHour) / secondsPerMin\n    remainingSeconds = seconds % secondsPerMin\n\n    // Build list of non-zero parts — do NOT reassign, build once\n    parts = [\n      if years > 0 then \"${years}y \" else \"\",\n      if days > 0 then \"${days}d \" else \"\",\n      if hours > 0 then \"${hours}h \" else \"\",\n      if minutes > 0 then \"${minutes}m \" else \"\",\n      if remainingSeconds > 0 then \"${remainingSeconds}s\" else \"\"\n    ]\n\n    // Join non-empty parts with space\n    formatted = parts[0] + parts[1] + parts[3]  + parts[4]\n\n    // Return updated record — use `r with` to override _value and unit\n    return {\n      r with\n      _value: if formatted == \"\" then \"0s\" else formatted,\n      unit: \"duration\"\n    }\n  })"
+            }
+          ],
+          "staticLegend": {},
+          "width": 4
+        },
+        {
+          "colors": [
+            { "id": "base", "name": "laser", "type": "text", "hex": "#00C9FF" }
+          ],
+          "decimalPlaces": 2,
+          "height": 3,
+          "kind": "Single_Stat",
+          "name": "Driver Input Power",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"dali_property\" and r.title == v.joce_device_title and r.title!=\"Unknown\")\n  |> group(columns: [\"device_guid\", \"title\", \"property\"])\n  |> filter(fn: (r) => r[\"property\"] == \"driverInputPower\")\n  |> keep(columns: [\"device_guid\", \"title\", \"property\", \"_value\", \"unit\", \"_time\"])\n  |> last()"
+            }
+          ],
+          "staticLegend": {},
+          "suffix": "W",
+          "width": 4,
+          "yPos": 3
+        },
+        {
+          "colors": [
+            { "id": "base", "name": "white", "type": "text", "hex": "#ffffff" }
+          ],
+          "fieldOptions": [
+            {
+              "displayName": "device_guid",
+              "fieldName": "device_guid",
+              "visible": true
+            },
+            {
+              "displayName": "property",
+              "fieldName": "property",
+              "visible": true
+            },
+            { "displayName": "title", "fieldName": "title", "visible": true },
+            { "displayName": "value", "fieldName": "_value", "visible": true },
+            { "displayName": "unit", "fieldName": "unit", "visible": true },
+            { "displayName": "titile", "fieldName": "titile" }
+          ],
+          "height": 7,
+          "kind": "Table",
+          "name": "All device detail",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> group(columns: [\"title\",\"property\",\"unit\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"title\", \"property\",\"unit\",\"device_guid\",\"_value\"])"
+            }
+          ],
+          "staticLegend": {},
+          "tableOptions": { "verticalTimeAxis": true },
+          "timeFormat": "YYYY-MM-DD HH:mm:ss",
+          "width": 12,
+          "yPos": 6
+        },
+        {
+          "colors": [
+            { "id": "base", "name": "laser", "type": "text", "hex": "#00C9FF" }
+          ],
+          "decimalPlaces": 2,
+          "height": 3,
+          "kind": "Single_Stat",
+          "name": "Lamp Operation Time",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"dali_property\" and r.title == v.joce_device_title and r.title!=\"Unknown\")\n  |> group(columns: [\"device_guid\", \"title\", \"property\"])\n  |> filter(fn: (r) => r[\"property\"] == \"lampOperationTime\")\n  |> keep(columns: [\"device_guid\", \"title\", \"property\", \"_value\", \"unit\", \"_time\"])\n  |> last()\n  |> map(fn: (r) => {\n    // Convert float _value to integer seconds\n    seconds = int(v: r._value)\n\n    // Define constants\n    secondsPerYear = 365 * 24 * 3600   // 31,536,000\n    secondsPerDay  = 24 * 3600         // 86,400\n    secondsPerHour = 3600\n    secondsPerMin  = 60\n\n    // Calculate components\n    years  = seconds / secondsPerYear\n    days   = (seconds % secondsPerYear) / secondsPerDay\n    hours  = (seconds % secondsPerDay) / secondsPerHour\n    minutes = (seconds % secondsPerHour) / secondsPerMin\n    remainingSeconds = seconds % secondsPerMin\n\n    // Build list of non-zero parts — do NOT reassign, build once\n    parts = [\n      if years > 0 then \"${years}y \" else \"\",\n      if days > 0 then \"${days}d \" else \"\",\n      if hours > 0 then \"${hours}h \" else \"\",\n      if minutes > 0 then \"${minutes}m \" else \"\",\n      if remainingSeconds > 0 then \"${remainingSeconds}s\" else \"\"\n    ]\n\n    // Join non-empty parts with space\n    formatted = parts[0] + parts[1] + parts[3]  + parts[4]\n\n    // Return updated record — use `r with` to override _value and unit\n    return {\n      r with\n      _value: if formatted == \"\" then \"0s\" else formatted,\n      unit: \"duration\"\n    }\n  })"
+            }
+          ],
+          "staticLegend": {},
+          "width": 4,
+          "xPos": 4
+        },
+        {
+          "colors": [
+            { "id": "base", "name": "laser", "type": "text", "hex": "#00C9FF" }
+          ],
+          "decimalPlaces": 2,
+          "height": 3,
+          "kind": "Single_Stat",
+          "name": "Driver Input Voltage",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"dali_property\" and r.title == v.joce_device_title and r.title!=\"Unknown\")\n  |> group(columns: [\"device_guid\", \"title\", \"property\"])\n  |> filter(fn: (r) => r[\"property\"] == \"driverInputVoltage\")\n  |> keep(columns: [\"device_guid\", \"title\", \"property\", \"_value\", \"unit\", \"_time\"])\n  |> last()"
+            }
+          ],
+          "staticLegend": {},
+          "suffix": "Vrms",
+          "width": 4,
+          "xPos": 4,
+          "yPos": 3
+        },
+        {
+          "colors": [
+            { "id": "base", "name": "laser", "type": "text", "hex": "#00C9FF" }
+          ],
+          "decimalPlaces": 2,
+          "height": 3,
+          "kind": "Single_Stat",
+          "name": "Driver Temperature",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"dali_property\" and r.title == v.joce_device_title and r.title!=\"Unknown\")\n  |> group(columns: [\"device_guid\", \"title\", \"property\"])\n  |> filter(fn: (r) => r[\"property\"] == \"driverTemperature\")\n  |> keep(columns: [\"device_guid\", \"title\", \"property\", \"_value\", \"unit\", \"_time\"])\n  |> last()"
+            }
+          ],
+          "staticLegend": {},
+          "suffix": "°C",
+          "width": 4,
+          "xPos": 8
+        },
+        {
+          "colors": [
+            { "id": "base", "name": "laser", "type": "text", "hex": "#00C9FF" }
+          ],
+          "decimalPlaces": 2,
+          "height": 3,
+          "kind": "Single_Stat",
+          "name": "Driver Energy Consumption",
+          "queries": [
+            {
+              "query": "from(bucket: \"dali_devices\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"dali_property\" and r.title == v.joce_device_title and r.title!=\"Unknown\")\n  |> group(columns: [\"device_guid\", \"title\", \"property\"])\n  |> filter(fn: (r) => r[\"property\"] == \"driverEnergyConsumption\")\n  |> keep(columns: [\"device_guid\", \"title\", \"property\", \"_value\", \"unit\", \"_time\"])\n  |> last()\n  |> map(fn: (r) => {\n    // Convert integer _value to float, then divide by 1000\n    energy_kWh = float(v: r._value) / 1000.0\n    return {\n      r with\n      _value: energy_kWh,\n      unit: \"kWh\"  // 👈 More accurate unit than \"duration\"\n    }\n  })"
+            }
+          ],
+          "staticLegend": {},
+          "suffix": "kWh",
+          "width": 4,
+          "xPos": 8,
+          "yPos": 3
+        }
+      ],
+      "name": "Joce"
+    }
+  }
+]
