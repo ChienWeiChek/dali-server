@@ -1,4 +1,11 @@
 services:
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiYjBmOTcyNzQzOTM5ZTBmMjk2MjFhMWViN2ExYTZlNjUiLCJ0IjoiNzVkNTI1ZTItOGRjNS00NzkxLWI3ZTctNDg3MDk4ZDQ0MTFkIiwicyI6Ik1UZzFaRFJoTXpNdE1EVTNOeTAwT1dFd0xXSTJORGt0WmprMk1UbGtOelJoTkdWaiJ9
+    networks:
+      - dali-net
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped
