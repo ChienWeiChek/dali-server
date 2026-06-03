@@ -9,7 +9,6 @@ import { DaliClient } from "./controllers/daliClient.js";
 import deviceRoutes from "./routes/devices.js";
 import historyRoutes from "./routes/history.js";
 import groupsRoutes from "./routes/groups.js";
-import wsRoutes from "./routes/ws.js";
 import healthRoutes from "./routes/health.js";
 import metricsRoutes from "./routes/metrics.js";
 import mqttRoutes from "./routes/mqtt.js";
@@ -49,7 +48,6 @@ const start = async () => {
     await fastify.register(deviceRoutes, { daliClients: clients });
     await fastify.register(groupsRoutes, { daliClients: clients });
     await fastify.register(historyRoutes);
-    await fastify.register(wsRoutes);
     await fastify.register(metricsRoutes);
     await fastify.register(mqttRoutes, { daliClients: clients });
 
