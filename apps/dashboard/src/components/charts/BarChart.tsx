@@ -1,4 +1,5 @@
 
+import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
 interface BarChartProps {
@@ -20,35 +21,21 @@ export default function BarChart({
   showValues = false,
   unit = ''
 }: BarChartProps) {
-  const option = {
-    title: {
-      text: title,
-      left: 'center',
-      textStyle: { fontSize: 14 }
-    },
+  const option = useMemo(() => ({
+    title: { text: title, left: 'center', textStyle: { fontSize: 14 } },
     tooltip: {
       trigger: 'axis',
-      axisPointer: {
-        type: 'shadow'
-      },
+      axisPointer: { type: 'shadow' },
       formatter: (params: any) => {
         const param = params[0];
         return `${param.name}<br/>${param.value} ${unit}`;
       }
     },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: {
       type: horizontal ? 'value' : 'category',
       data: horizontal ? undefined : data.map(d => d.name),
-      axisLabel: {
-        rotate: horizontal ? 0 : 45,
-        interval: 0
-      }
+      axisLabel: { rotate: horizontal ? 0 : 45, interval: 0 }
     },
     yAxis: {
       type: horizontal ? 'category' : 'value',
@@ -61,9 +48,7 @@ export default function BarChart({
       {
         type: 'bar',
         data: data.map(d => d.value),
-        itemStyle: {
-          color: color
-        },
+        itemStyle: { color },
         label: {
           show: showValues,
           position: horizontal ? 'right' : 'top',
@@ -72,7 +57,7 @@ export default function BarChart({
         barMaxWidth: 50
       }
     ]
-  };
+  }), [data, title, color, horizontal, showValues, unit]);
 
-  return <ReactECharts option={option} style={{ height }} />;
+  return <ReactECharts option={option} lazyUpdate={true} notMerge={true} style={{ height }} />;
 }

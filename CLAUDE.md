@@ -84,6 +84,24 @@ docs/              API contract, data model, health check docs
 ### InfluxDB Data Model
 Measurements are written as `dali_property` with tags for controller, device GUID, and property name. Query via `/api/devices/:guid/history`.
 
+#### Cumulative counter properties
+Some properties are odometer-style running totals that only ever increase (barring a counter reset). To get consumption over a time range, you must compute `last_value - first_value`, **not** `mean()`.
+
+| Property | Unit | Notes |
+|---|---|---|
+| `driverEnergyConsumption` | Wh | Divide by 1000 to display as kWh |
+| `driverOperationTime` | seconds | Total time driver has been on |
+| `lampOperationTime` | seconds | Total time lamp has been on |
+
+**Example:** device reads 7 Wh after 7 days, then 17 Wh after 14 days → usage in days 8–14 = 17 − 7 = 10 Wh.
+
+**InfluxDB pattern** (used in `history.ts` and `metrics.ts`):
+```flux
+|> aggregateWindow(every: <window>, fn: last, createEmpty: false)
+|> difference(nonNegative: true)   // nonNegative skips counter-reset jumps
+```
+The canonical list of cumulative properties lives in `services/api/src/utils/influxHelpers.ts` (`CUMULATIVE_PROPERTIES`). Add new ones there.
+
 
 ## Tech Stack
 

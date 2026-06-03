@@ -199,88 +199,65 @@ export default function Dashboard() {
     devicesByZone: [],
     powerTrend: [],
     voltageTrend: [],
+    energyTrend: [],
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch energy by device
-  useEffect(() => {
-    const fetchEnergyByDevice = async () => {
-      try {
-        const res = await apiFetch("/api/devices/energy-by-device");
-        if (res.ok) {
-          const data = await res.json();
-          setChartData((prev) => ({
-            ...prev,
-            energyByDevice: data,
-          }));
-        }
-      } catch (err: any) {
-        console.error("Error fetching energy by device:", err);
-      }
-    };
-
-    fetchEnergyByDevice();
-  }, []);
-
-  // Fetch historical data for trend charts
+  // Fetch historical data for trend charts — all three in parallel, single state update
   useEffect(() => {
     const fetchHistoricalData = async () => {
       try {
-        // Fetch driver temperature trend
-        const tempRes = await apiFetch(
-          `/api/devices/history/aggregate?property=driverTemperature&range=${timeRange}`,
-        );
-        if (tempRes.ok) {
-          const tempData = await tempRes.json();
-          setChartData((prev) => ({
-            ...prev,
-            lightLevelTrend: tempData.map((d: any) => ({
-              time: new Date(d.time).toLocaleTimeString("en-US", {
+        const isHourRange = timeRange.endsWith("h");
+        const toPoints = (raw: any[]) =>
+          raw.map((d: any) => {
+            const date = new Date(d.time);
+            return {
+              time: date.toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
               }),
+              label: isHourRange
+                ? date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+                : date.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
               value: d.value || 0,
-            })),
-          }));
-        }
+            };
+          });
 
-        // Fetch power trend
-        const powerRes = await apiFetch(
-          `/api/devices/history/aggregate?property=driverInputPower&range=${timeRange}`,
-        );
-        if (powerRes.ok) {
-          const powerData = await powerRes.json();
-          setChartData((prev) => ({
-            ...prev,
-            powerTrend: powerData.map((d: any) => ({
-              time: new Date(d.time).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              value: d.value || 0,
-            })),
-          }));
-        }
+        const [tempRes, powerRes, voltageRes, energyRes, energyTrendRes] = await Promise.all([
+          apiFetch(
+            `/api/devices/history/aggregate?property=driverTemperature&range=${timeRange}`,
+          ),
+          apiFetch(
+            `/api/devices/history/aggregate?property=driverInputPower&range=${timeRange}`,
+          ),
+          apiFetch(
+            `/api/devices/history/aggregate?property=driverInputVoltage&range=${timeRange}`,
+          ),
+          apiFetch(`/api/devices/energy-by-device?range=${timeRange}`),
+          apiFetch(`/api/devices/energy/trend?range=${timeRange}`),
+        ]);
 
-        // Fetch voltage trend
-        const voltageRes = await apiFetch(
-          `/api/devices/history/aggregate?property=driverInputVoltage&range=${timeRange}`,
-        );
-        if (voltageRes.ok) {
-          const voltageData = await voltageRes.json();
-          setChartData((prev) => ({
-            ...prev,
-            voltageTrend: voltageData.map((d: any) => ({
-              time: new Date(d.time).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              value: d.value || 0,
-            })),
-          }));
-        }
+        const [tempData, powerData, voltageData, energyData, energyTrendData] =
+          await Promise.all([
+            tempRes.ok ? tempRes.json() : Promise.resolve([]),
+            powerRes.ok ? powerRes.json() : Promise.resolve([]),
+            voltageRes.ok ? voltageRes.json() : Promise.resolve([]),
+            energyRes.ok ? energyRes.json() : Promise.resolve([]),
+            energyTrendRes.ok ? energyTrendRes.json() : Promise.resolve([]),
+          ]);
+
+        setChartData((prev) => ({
+          ...prev,
+          lightLevelTrend: toPoints(tempData),
+          powerTrend: toPoints(powerData),
+          voltageTrend: toPoints(voltageData),
+          energyByDevice: energyData,
+          energyTrend: toPoints(energyTrendData),
+        }));
       } catch (err: any) {
         console.error("Error fetching historical data:", err);
       }
@@ -382,7 +359,22 @@ export default function Dashboard() {
         </Grid>
       </Grid>
 
-      {/* Charts Row 3 - Power and Voltage Charts */}
+      {/* Energy Consumption Trend */}
+      <Grid container spacing={3} mb={3}>
+        <Grid item xs={12}>
+          <Paper sx={{ p: 2 }}>
+            <AreaChart
+              data={chartData.energyTrend}
+              title={`Total Energy Consumption Trend — All Devices (${timeRange})`}
+              color="#4caf50"
+              gradient={true}
+              unit="Wh"
+            />
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Power and Voltage Charts */}
       <Grid container spacing={3} mb={3}>
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2 }}>

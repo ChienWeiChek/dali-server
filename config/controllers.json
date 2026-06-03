@@ -1,14 +1,7 @@
 [
   {
     "name": "Controller 1",
-    "ip": "192.168.68.188",
-    "username": "jocedali",
-    "password": "dali88",
-    "pollingIntervalSec": 5
-  },
-  {
-    "name": "Controller 2",
-    "ip": "192.168.68.188",
+    "ip": "joce-controller-1.masen-home.buzz",
     "username": "jocedali",
     "password": "dali88",
     "pollingIntervalSec": 5

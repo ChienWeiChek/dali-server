@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
+import { validateRange, rangeToWindow, CUMULATIVE_PROPERTIES } from "../utils/influxHelpers.js";
 
 export default async function historyRoutes(fastify: FastifyInstance) {
   const config = await loadConfig();
@@ -29,17 +30,37 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       const safeGuid = validateTag(guid, "guid");
       const safeProperty = validateTag(property, "property");
       const safeRange = validateRange(range);
+      const window = rangeToWindow(safeRange);
+      const isCumulative = CUMULATIVE_PROPERTIES.has(safeProperty);
 
-      const fluxQuery = `
+      // Cumulative properties (energy, operation time) are odometer-style counters.
+      // last() per window preserves the counter shape, then difference() converts
+      // consecutive bucket values into per-window deltas (actual consumption).
+      const fluxQuery = isCumulative
+        ? `
       from(bucket: "${config.influx.bucket}")
         |> range(start: -${safeRange})
         |> filter(fn: (r) => r._measurement == "dali_property")
         |> filter(fn: (r) => r.device_guid == "${safeGuid}" and r.property == "${safeProperty}" and r.controller == "${controllerName}")
-        |> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn:"_value")
-        |> keep(columns: ["_time", "value_num", "value_str", "controller", "unit", "device_guid", "property"])
+        |> filter(fn: (r) => r._field == "value_num")
+        |> aggregateWindow(every: ${window}, fn: median, createEmpty: true)
+        |> difference(nonNegative: true)
+        |> filter(fn: (r) => exists r._value)
+        |> map(fn: (r) => ({r with _time: string(v: r._time), value_num: r._value}))
+        |> keep(columns: ["_time", "value_num", "unit", "device_guid", "property"])
+        |> sort(columns: ["_time"])
+    `
+        : `
+      from(bucket: "${config.influx.bucket}")
+        |> range(start: -${safeRange})
+        |> filter(fn: (r) => r._measurement == "dali_property")
+        |> filter(fn: (r) => r.device_guid == "${safeGuid}" and r.property == "${safeProperty}" and r.controller == "${controllerName}")
+        |> filter(fn: (r) => r._field == "value_num")
+        |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
+        |> map(fn: (r) => ({r with _time: string(v: r._time), value_num: r._value}))
+        |> keep(columns: ["_time", "value_num", "unit", "device_guid", "property"])
         |> sort(columns: ["_time"])
     `;
-      console.log("🚀 ~ historyRoutes ~ fluxQuery:", fluxQuery)
 
       try {
         const rows = await queryApi.collectRows(fluxQuery);
@@ -59,9 +80,3 @@ function validateTag(value: string, label: string): string {
   return value;
 }
 
-function validateRange(range: string): string {
-  if (typeof range === "string" && /^[0-9]+(s|m|h|d|w)$/i.test(range)) {
-    return range;
-  }
-  return "24h";
-}

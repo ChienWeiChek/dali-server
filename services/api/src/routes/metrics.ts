@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
+import { rangeToWindow, validateRange } from "../utils/influxHelpers.js";
 interface Row {
   controller: string;
   property: string;
@@ -328,15 +329,19 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
       }
 
       // Validate range
-      const validRange = /^[0-9]+(s|m|h|d|w)$/i.test(range) ? range : "24h";
+      const validRange = validateRange(range);
+      const window = rangeToWindow(validRange);
 
       try {
+        // aggregateWindow buckets data into equal time intervals, then we
+        // group all devices together and take the cross-device mean per bucket.
         const query = `
           from(bucket: "${config.influx.bucket}")
             |> range(start: -${validRange})
             |> filter(fn: (r) => r._measurement == "dali_property")
             |> filter(fn: (r) => r.property == "${property}")
             |> filter(fn: (r) => r._field == "value_num")
+            |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
             |> group(columns: ["_time"])
             |> mean()
             |> keep(columns: ["_time", "_value"])
@@ -350,7 +355,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
 
         return rows.map((row) => ({
           time: row._time,
-          value: row._value,
+          value: +row._value.toFixed(2),
         }));
       } catch (err) {
         fastify.log.error(err);
@@ -363,17 +368,25 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
 
   // Energy consumption by device
   fastify.get("/api/devices/energy-by-device", async (request: any, reply) => {
+    const { range = "30d" } = request.query as { range?: string };
+    const validRange = validateRange(range, "30d");
+
     try {
+      // driverEnergyConsumption is a cumulative counter (odometer-style).
+      // difference(nonNegative: true) computes per-consecutive-point deltas,
+      // skipping any negative jumps caused by counter resets.
+      // sum() of those deltas == last - first within the range.
       const query = `
           from(bucket: "${config.influx.bucket}")
-            |> range(start: -30d)
-            |> filter(fn: (r) => r._measurement == "dali_property" 
-                    and r.property == "driverEnergyConsumption" 
-                    and r._field == "value_num" 
+            |> range(start: -${validRange})
+            |> filter(fn: (r) => r._measurement == "dali_property"
+                    and r.property == "driverEnergyConsumption"
+                    and r._field == "value_num"
                     and r.title != "Unknown")
             |> group(columns: ["device_guid", "controller", "title"])
-            |> last()
-            |> keep(columns: ["device_guid", "controller", "title", "_value"])
+            |> sort(columns: ["_time"])
+            |> difference(nonNegative: true)
+            |> sum()
             |> map(fn: (r) => ({
               r with
               _value: float(v: r._value) / 1000.0
@@ -392,8 +405,8 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           name: row.title
             ? `${row.controller} - ${row.title}`
             : `${row.controller} - ${row.device_guid.substring(0, 8)}`,
-          value: Number(row._value.toFixed(2)),
-          unit: "kwh"
+          value: +row._value.toFixed(2),
+          unit: "kWh",
         }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 10);
@@ -402,6 +415,43 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
       return reply
         .code(500)
         .send({ error: "Failed to fetch energy by device" });
+    }
+  });
+
+  // Total energy consumption trend across all devices over time
+  fastify.get("/api/devices/energy/trend", async (request: any, reply) => {
+    const { range = "24h" } = request.query as { range?: string };
+    const validRange = validateRange(range);
+    const window = rangeToWindow(validRange);
+
+    try {
+      // Per device: bucket into windows (last), compute delta (difference).
+      // Then sum all device deltas per time window to get fleet-wide consumption.
+      const query = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -${validRange})
+          |> filter(fn: (r) => r._measurement == "dali_property"
+                  and r.property == "driverEnergyConsumption"
+                  and r._field == "value_num")
+          |> group(columns: ["device_guid"])
+          |> aggregateWindow(every: ${window}, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> group(columns: ["_time"])
+          |> sum()
+          |> group()
+          |> keep(columns: ["_time", "_value"])
+          |> sort(columns: ["_time"])
+      `;
+
+      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
+      return rows.map((row) => ({
+        time: row._time,
+        value: +row._value.toFixed(4),
+      }));
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch energy trend" });
     }
   });
 
@@ -433,3 +483,4 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
     }
   });
 }
+

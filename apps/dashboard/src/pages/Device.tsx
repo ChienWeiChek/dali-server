@@ -95,6 +95,15 @@ const UI_CONFIG = {
       tooltipLabel: "Temperature",
       valueFormatter: (value: number) => value.toFixed(1),
     },
+    {
+      property: "driverEnergyConsumption",
+      title: "Energy Consumption",
+      unit: "Wh",
+      color: "#4caf50",
+      yAxisName: "Energy (Wh)",
+      tooltipLabel: "Energy",
+      valueFormatter: (value: number) => value.toFixed(2),
+    },
   ] as ChartConfig[],
 
   // Properties to show as stat cards
