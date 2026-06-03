@@ -425,8 +425,9 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
     const window = rangeToWindow(validRange);
 
     try {
-      // Per device: bucket into windows (last), compute delta (difference).
-      // Then sum all device deltas per time window to get fleet-wide consumption.
+      // Per device: bucket into windows (last), compute per-window delta.
+      // Cross-device sum is done in JS to avoid InfluxDB Arrow panic on
+      // cross-table aggregations (group(columns:["_time"]) |> sum()).
       const query = `
         from(bucket: "${config.influx.bucket}")
           |> range(start: -${validRange})
@@ -434,24 +435,70 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
                   and r.property == "driverEnergyConsumption"
                   and r._field == "value_num")
           |> group(columns: ["device_guid"])
-          |> aggregateWindow(every: ${window}, fn: last, createEmpty: true)
+          |> aggregateWindow(every: ${window}, fn: max, createEmpty: true)
           |> difference(nonNegative: true)
           |> filter(fn: (r) => exists r._value)
-          |> group(columns: ["_time"])
-          |> sum()
-          |> group()
           |> keep(columns: ["_time", "_value"])
-          |> sort(columns: ["_time"])
       `;
 
       const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
-      return rows.map((row) => ({
-        time: row._time,
-        value: +row._value.toFixed(4),
-      }));
+
+      const byTime: Record<string, number> = {};
+      for (const row of rows) {
+        byTime[row._time] = (byTime[row._time] ?? 0) + row._value;
+      }
+
+      return Object.entries(byTime)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([time, value]) => ({ time, value: +value.toFixed(4) }));
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch energy trend" });
+    }
+  });
+
+  // Monthly energy consumption for the last 12 months (fleet-wide)
+  fastify.get("/api/devices/energy/monthly", async (_request, reply) => {
+    try {
+      // Use 1d windows to avoid the InfluxDB Arrow panic with 1mo aggregateWindow.
+      // Monthly grouping and cross-device sum are done in JS.
+      const query = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -365d)
+          |> filter(fn: (r) => r._measurement == "dali_property"
+                  and r.property == "driverEnergyConsumption"
+                  and r._field == "value_num")
+          |> group(columns: ["device_guid"])
+          |> aggregateWindow(every: 1d, fn: max, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_time", "_value"])
+      `;
+
+      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
+
+      // Group daily deltas by YYYY-MM, sum across devices and days
+      const monthly: Record<string, number> = {};
+      for (const row of rows) {
+        const d = new Date(row._time);
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        monthly[key] = (monthly[key] ?? 0) + row._value;
+      }
+
+      return Object.entries(monthly)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => {
+          const [year, month] = key.split("-").map(Number);
+          const name = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
+            month: "short",
+            year: "numeric",
+            timeZone: "UTC",
+          });
+          return { name, value: +(value / 1000).toFixed(2) };
+        });
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch monthly energy" });
     }
   });
 

@@ -43,7 +43,7 @@ export default async function historyRoutes(fastify: FastifyInstance) {
         |> filter(fn: (r) => r._measurement == "dali_property")
         |> filter(fn: (r) => r.device_guid == "${safeGuid}" and r.property == "${safeProperty}" and r.controller == "${controllerName}")
         |> filter(fn: (r) => r._field == "value_num")
-        |> aggregateWindow(every: ${window}, fn: median, createEmpty: true)
+        |> aggregateWindow(every: ${window}, fn: max, createEmpty: true)
         |> difference(nonNegative: true)
         |> filter(fn: (r) => exists r._value)
         |> map(fn: (r) => ({r with _time: string(v: r._time), value_num: r._value}))
