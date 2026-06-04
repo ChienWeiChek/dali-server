@@ -501,33 +501,5 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "Failed to fetch monthly energy" });
     }
   });
-
-  // Devices by zone
-  fastify.get("/api/devices/by-zone", async (request: any, reply) => {
-    try {
-      const query = `
-        from(bucket: "${config.influx.bucket}")
-          |> range(start: -30d)
-          |> filter(fn: (r) => r._measurement == "dali_property")
-          |> group(columns: ["device_guid", "zone"])
-          |> distinct(column: "device_guid")
-          |> group(columns: ["zone"])
-          |> count()
-      `;
-
-      const rows = await queryApi.collectRows<{
-        zone?: string;
-        _value: number;
-      }>(query);
-
-      return rows.map((row) => ({
-        name: row.zone || "Unassigned",
-        value: row._value,
-      }));
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: "Failed to fetch devices by zone" });
-    }
-  });
 }
 
