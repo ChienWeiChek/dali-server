@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Devices from "./pages/DevicesList";
 import Device from "./pages/Device";
 import Dashboard from "./pages/Dashboard";
+import EnergyUsage from "./pages/EnergyUsage";
 import Group from "./pages/Group";
 import Errors from "./pages/Errors";
 import Settings from "./pages/Settings";
@@ -30,6 +31,7 @@ function App() {
           <Route element={<ClientLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/energy" element={<EnergyUsage />} />
             <Route path="/devices" element={<Devices />} />
             <Route path="/devices/:controller/:guid" element={<Device />} />
             <Route path="/groups/:controller" element={<Group/>} />

@@ -138,8 +138,20 @@ export class MqttSubscriber {
         fields.value_str = String(value);
       }
 
-      // Using server receive time (now), ignoring payload date/time as requested
-      const timestamp = new Date();
+      // Parse timestamp from payload date ("2026.06.04") and time ("11:29:01")
+      // MQTT_TIMEZONE_OFFSET controls the source timezone (default: +08:00)
+      const tzOffset = process.env.MQTT_TIMEZONE_OFFSET || '+08:00';
+      let timestamp: Date;
+      if (payload.date && payload.time) {
+        const normalizedDate = (payload.date as string).replace(/\./g, '-');
+        timestamp = new Date(`${normalizedDate}T${payload.time}${tzOffset}`);
+        if (isNaN(timestamp.getTime())) {
+          console.warn(`Invalid date/time in payload for ${topic}: ${payload.date} ${payload.time}, falling back to now`);
+          timestamp = new Date();
+        }
+      } else {
+        timestamp = new Date();
+      }
 
       // Lookup title
       const title = this.deviceTitleMap.get(guid) || 'Unknown';

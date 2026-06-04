@@ -1,7 +1,14 @@
 import { FastifyInstance } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
-import { validateRange, rangeToWindow, CUMULATIVE_PROPERTIES } from "../utils/influxHelpers.js";
+import {
+  validateRange,
+  rangeToWindow,
+  CUMULATIVE_PROPERTIES,
+  isoWeekKey,
+  isoWeekLabel,
+  validateTag,
+} from "../utils/influxHelpers.js";
 
 export default async function historyRoutes(fastify: FastifyInstance) {
   const config = await loadConfig();
@@ -19,7 +26,7 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       const controllerName = config.controllers.find(
         (c) => c.name === controller,
       )?.username; // Assuming username is unique and identifies the controller
-      
+
       if (!controllerName) {
         return reply.code(404).send({ error: "Controller not found" });
       }
@@ -103,7 +110,10 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       `;
 
       try {
-        const rows = await queryApi.collectRows<{ _time: string; _value: number }>(fluxQuery);
+        const rows = await queryApi.collectRows<{
+          _time: string;
+          _value: number;
+        }>(fluxQuery);
 
         const monthly: Record<string, number> = {};
         for (const row of rows) {
@@ -116,7 +126,9 @@ export default async function historyRoutes(fastify: FastifyInstance) {
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([key, value]) => {
             const [year, month] = key.split("-").map(Number);
-            const name = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
+            const name = new Date(
+              Date.UTC(year, month - 1, 1),
+            ).toLocaleDateString("en-US", {
               month: "short",
               year: "numeric",
               timeZone: "UTC",
@@ -129,12 +141,109 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       }
     },
   );
+
+  // Weekly energy — last 12 complete ISO weeks (Mon–Sun) for a single device
+  fastify.get(
+    "/api/devices/:controller/:guid/energy/weekly",
+    async (request: any, reply) => {
+      const { guid, controller } = request.params;
+      const controllerName = config.controllers.find(
+        (c) => c.name === controller,
+      )?.username;
+      if (!controllerName)
+        return reply.code(404).send({ error: "Controller not found" });
+
+      const safeGuid = validateTag(guid, "guid");
+      const fluxQuery = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -91d)
+          |> filter(fn: (r) => r._measurement == "dali_property")
+          |> filter(fn: (r) => r.device_guid == "${safeGuid}"
+                  and r.property == "driverEnergyConsumption"
+                  and r.controller == "${controllerName}"
+                  and r._field == "value_num")
+          |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_time", "_value"])
+      `;
+      try {
+        const rows = await queryApi.collectRows<{
+          _time: string;
+          _value: number;
+        }>(fluxQuery);
+        const weekly: Record<string, number> = {};
+        for (const row of rows) {
+          const key = isoWeekKey(new Date(row._time));
+          weekly[key] = (weekly[key] ?? 0) + row._value;
+        }
+        const currentWeek = isoWeekKey(new Date());
+        return Object.entries(weekly)
+          .filter(([key]) => key !== currentWeek)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-12)
+          .map(([key, value]) => ({
+            name: isoWeekLabel(key),
+            value: +(value / 1000).toFixed(3),
+          }));
+      } catch (err) {
+        request.log.error(err);
+        return reply.code(500).send({ error: "Database error" });
+      }
+    },
+  );
+
+  // Daily energy — last 30 days for a single device
+  fastify.get(
+    "/api/devices/:controller/:guid/energy/daily",
+    async (request: any, reply) => {
+      const { guid, controller } = request.params;
+      const controllerName = config.controllers.find(
+        (c) => c.name === controller,
+      )?.username;
+      if (!controllerName)
+        return reply.code(404).send({ error: "Controller not found" });
+
+      const safeGuid = validateTag(guid, "guid");
+      const fluxQuery = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -30d)
+          |> filter(fn: (r) => r._measurement == "dali_property")
+          |> filter(fn: (r) => r.device_guid == "${safeGuid}"
+                  and r.property == "driverEnergyConsumption"
+                  and r.controller == "${controllerName}"
+                  and r._field == "value_num")
+          |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_time", "_value"])
+      `;
+      try {
+        const rows = await queryApi.collectRows<{
+          _time: string;
+          _value: number;
+        }>(fluxQuery);
+        const daily: Record<string, number> = {};
+        for (const row of rows) {
+          const key = new Date(row._time).toISOString().slice(0, 10);
+          daily[key] = (daily[key] ?? 0) + row._value;
+        }
+        return Object.entries(daily)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => ({
+            name: new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              timeZone: "UTC",
+            }),
+            value: +(value / 1000).toFixed(3),
+          }));
+      } catch (err) {
+        request.log.error(err);
+        return reply.code(500).send({ error: "Database error" });
+      }
+    },
+  );
 }
 
-function validateTag(value: string, label: string): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9:_\-]+$/.test(value)) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return value;
-}
 

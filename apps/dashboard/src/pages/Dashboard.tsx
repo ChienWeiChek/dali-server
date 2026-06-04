@@ -189,14 +189,6 @@ const RealTimeGauges = () => {
   );
 };
 
-const useMonthlyEnergy = () =>
-  useSWR("/api/devices/energy/monthly", async () => {
-    const res = await apiFetch("/api/devices/energy/monthly");
-    return res.ok
-      ? res.json()
-      : Promise.reject(new Error("Failed to fetch monthly energy"));
-  });
-
 export default function Dashboard() {
   // State
   const [timeRange, setTimeRange] = useState("24h");
@@ -210,7 +202,6 @@ export default function Dashboard() {
     energyTrend: [],
   });
 
-  const { data: monthlyEnergy = [], isLoading: monthlyLoading } = useMonthlyEnergy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -379,28 +370,6 @@ export default function Dashboard() {
               gradient={true}
               unit="Wh"
             />
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Monthly Energy Usage — last 12 months, unaffected by time range filter */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            {monthlyLoading ? (
-              <Box display="flex" justifyContent="center" py={6}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              <BarChart
-                data={monthlyEnergy}
-                title="Monthly Energy Usage — Last 12 Months"
-                color="#5470c6"
-                height="350px"
-                unit="kWh"
-                showValues={true}
-              />
-            )}
           </Paper>
         </Grid>
       </Grid>

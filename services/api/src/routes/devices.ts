@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { DaliClient } from "../controllers/daliClient.js";
 import { loadConfig } from "../config/loader.js";
+import { validateTag } from "../utils/influxHelpers.js";
 
 interface DeviceRoutesOptions {
   daliClients: DaliClient[];
@@ -137,10 +138,3 @@ export default async function deviceRoutes(
   });
 }
 
-function validateTag(value: string, label: string): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9:_\-]+$/.test(value)) {
-    throw new Error(`Invalid ${label}`);
-    console.log("🚀 ~ validateTag ~ Error:", Error);
-  }
-  return value;
-}

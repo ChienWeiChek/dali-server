@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyRequest } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
-import { rangeToWindow, validateRange } from "../utils/influxHelpers.js";
+import { rangeToWindow, validateRange, isoWeekKey, isoWeekLabel } from "../utils/influxHelpers.js";
+import { localDayStr, localMonthStartStr, localMidnightUTC } from "../utils/tzHelpers.js";
 interface Row {
   controller: string;
   property: string;
@@ -457,49 +458,193 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Monthly energy consumption for the last 12 months (fleet-wide)
-  fastify.get("/api/devices/energy/monthly", async (_request, reply) => {
+  // Monthly energy consumption for the last 12 months — optional ?guids= zone filter
+  fastify.get("/api/devices/energy/monthly", async (request: any, reply) => {
+    const { guids } = request.query as { guids?: string };
+    const guidFilter = buildGuidFilter(guids);
     try {
-      // Use 1d windows to avoid the InfluxDB Arrow panic with 1mo aggregateWindow.
-      // Monthly grouping and cross-device sum are done in JS.
       const query = `
         from(bucket: "${config.influx.bucket}")
           |> range(start: -365d)
           |> filter(fn: (r) => r._measurement == "dali_property"
                   and r.property == "driverEnergyConsumption"
                   and r._field == "value_num")
+          ${guidFilter}
           |> group(columns: ["device_guid"])
-          |> aggregateWindow(every: 1d, fn: max, createEmpty: true)
+          |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
           |> difference(nonNegative: true)
           |> filter(fn: (r) => exists r._value)
           |> keep(columns: ["_time", "_value"])
       `;
-
       const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
-
-      // Group daily deltas by YYYY-MM, sum across devices and days
       const monthly: Record<string, number> = {};
       for (const row of rows) {
         const d = new Date(row._time);
         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
         monthly[key] = (monthly[key] ?? 0) + row._value;
       }
-
       return Object.entries(monthly)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => {
           const [year, month] = key.split("-").map(Number);
           const name = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
-            month: "short",
-            year: "numeric",
-            timeZone: "UTC",
+            month: "short", year: "numeric", timeZone: "UTC",
           });
-          return { name, value: +(value / 1000).toFixed(2) };
+          return { name, value: +(value / 1000).toFixed(3) };
         });
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch monthly energy" });
     }
   });
+
+  // Weekly energy — last 12 complete ISO weeks (Mon–Sun), optional ?guids=
+  fastify.get("/api/devices/energy/weekly", async (request: any, reply) => {
+    const { guids } = request.query as { guids?: string };
+    const guidFilter = buildGuidFilter(guids);
+    try {
+      const query = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -91d)
+          |> filter(fn: (r) => r._measurement == "dali_property"
+                  and r.property == "driverEnergyConsumption"
+                  and r._field == "value_num")
+          ${guidFilter}
+          |> group(columns: ["device_guid"])
+          |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_time", "_value"])
+      `;
+      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
+      const weekly: Record<string, number> = {};
+      for (const row of rows) {
+        const key = isoWeekKey(new Date(row._time));
+        weekly[key] = (weekly[key] ?? 0) + row._value;
+      }
+      const currentWeek = isoWeekKey(new Date());
+      return Object.entries(weekly)
+        .filter(([key]) => key !== currentWeek)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([key, value]) => ({
+          name: isoWeekLabel(key),
+          value: +(value / 1000).toFixed(3),
+        }));
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch weekly energy" });
+    }
+  });
+
+  // Daily energy — last 30 days, optional ?guids=
+  fastify.get("/api/devices/energy/daily", async (request: any, reply) => {
+    const { guids } = request.query as { guids?: string };
+    const guidFilter = buildGuidFilter(guids);
+    try {
+      const query = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -30d)
+          |> filter(fn: (r) => r._measurement == "dali_property"
+                  and r.property == "driverEnergyConsumption"
+                  and r._field == "value_num")
+          ${guidFilter}
+          |> group(columns: ["device_guid"])
+          |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_time", "_value"])
+      `;
+      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
+      const daily: Record<string, number> = {};
+      for (const row of rows) {
+        const d = new Date(row._time);
+        const key = d.toISOString().slice(0, 10);
+        daily[key] = (daily[key] ?? 0) + row._value;
+      }
+      return Object.entries(daily)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => ({
+          name: new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", {
+            month: "short", day: "numeric", timeZone: "UTC",
+          }),
+          value: +(value / 1000).toFixed(3),
+        }));
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch daily energy" });
+    }
+  });
+
+  // Energy stat cards — today, yesterday, current month, last month with % change
+  fastify.get("/api/devices/energy/stats", async (request: any, reply) => {
+    const { tz = "UTC", guids } = request.query as { tz?: string; guids?: string };
+    const guidFilter = buildGuidFilter(guids);
+    const now = new Date();
+
+    const startOfToday      = localMidnightUTC(tz, localDayStr(tz, 0));
+    const startOfYesterday  = localMidnightUTC(tz, localDayStr(tz, -1));
+    const startOf2DaysAgo   = localMidnightUTC(tz, localDayStr(tz, -2));
+    const startOfThisMonth  = localMidnightUTC(tz, localMonthStartStr(tz, 0));
+    const startOfLastMonth  = localMidnightUTC(tz, localMonthStartStr(tz, -1));
+    const startOf2MonthsAgo = localMidnightUTC(tz, localMonthStartStr(tz, -2));
+
+    const queryPeriod = async (start: Date, stop: Date, window: string): Promise<number> => {
+      const q = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: ${start.toISOString()}, stop: ${stop.toISOString()})
+          |> filter(fn: (r) => r._measurement == "dali_property"
+                  and r.property == "driverEnergyConsumption"
+                  and r._field == "value_num")
+          ${guidFilter}
+          |> group(columns: ["device_guid"])
+          |> aggregateWindow(every: ${window}, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_value"])
+      `;
+      const rows = await queryApi.collectRows<{ _value: number }>(q);
+      return rows.reduce((sum, r) => sum + (r._value ?? 0), 0);
+    };
+
+    const pct = (curr: number, prev: number): number | null =>
+      prev === 0 ? null : +((( curr - prev) / prev) * 100).toFixed(1);
+
+    try {
+      const [today, yesterday, dayBefore, currentMonth, lastMonth, monthBefore] =
+        await Promise.all([
+          queryPeriod(startOfToday,      now,              "1h"),
+          queryPeriod(startOfYesterday,  startOfToday,     "1h"),
+          queryPeriod(startOf2DaysAgo,   startOfYesterday, "1h"),
+          queryPeriod(startOfThisMonth,  now,              "1d"),
+          queryPeriod(startOfLastMonth,  startOfThisMonth, "1d"),
+          queryPeriod(startOf2MonthsAgo, startOfLastMonth, "1d"),
+        ]);
+
+      return {
+        today:        { wh: today,        changePercent: pct(today, yesterday)   },
+        yesterday:    { wh: yesterday,    changePercent: pct(yesterday, dayBefore) },
+        currentMonth: { wh: currentMonth, changePercent: pct(currentMonth, lastMonth) },
+        lastMonth:    { wh: lastMonth,    changePercent: pct(lastMonth, monthBefore)  },
+      };
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch energy stats" });
+    }
+  });
 }
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+/** Builds an optional Flux device_guid filter line from a comma-separated guids string. */
+function buildGuidFilter(guids?: string): string {
+  if (!guids) return "";
+  const conditions = guids
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => `r.device_guid == "${id}"`);
+  return conditions.length ? `|> filter(fn: (r) => ${conditions.join(" or ")})` : "";
+}
+
 

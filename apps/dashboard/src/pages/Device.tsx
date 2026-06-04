@@ -139,6 +139,37 @@ const UI_CONFIG = {
   ] as CardConfig[],
 };
 
+function buildEnergyBarOption(
+  data: { name: string; value: number }[],
+  title: string,
+  color: string,
+) {
+  return {
+    title: { text: title, left: "center", textStyle: { fontSize: 13 } },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params: any) => `${params[0].name}<br/>Energy: ${params[0].value} kWh`,
+    },
+    grid: { left: "4%", right: "4%", bottom: "18%", containLabel: true },
+    xAxis: {
+      type: "category",
+      data: data.map((d) => d.name),
+      axisLabel: { rotate: 35, interval: 0, fontSize: 10 },
+    },
+    yAxis: { type: "value", name: "kWh", nameLocation: "middle", nameGap: 45 },
+    series: [
+      {
+        type: "bar",
+        data: data.map((d) => d.value),
+        itemStyle: { color },
+        label: { show: true, position: "top", formatter: "{c}", fontSize: 10 },
+        barMaxWidth: 40,
+      },
+    ],
+  };
+}
+
 export default function DeviceDetailPage() {
   const { guid, controller } = useParams();
   if (!guid || !controller) return <>404</>;
@@ -149,12 +180,19 @@ export default function DeviceDetailPage() {
   const [timeRange, setTimeRange] = useState("24h");
 
   const hasEnergy = device?.properties.includes("driverEnergyConsumption");
+  const energyFetcher = (url: string) => apiFetch(url).then((r) => (r.ok ? r.json() : []));
+
   const { data: monthlyEnergy = [] } = useSWR(
     hasEnergy ? `/api/devices/${controller}/${guid}/energy/monthly` : null,
-    async (url: string) => {
-      const res = await apiFetch(url);
-      return res.ok ? res.json() : [];
-    },
+    energyFetcher,
+  );
+  const { data: weeklyEnergy = [] } = useSWR(
+    hasEnergy ? `/api/devices/${controller}/${guid}/energy/weekly` : null,
+    energyFetcher,
+  );
+  const { data: dailyEnergy = [] } = useSWR(
+    hasEnergy ? `/api/devices/${controller}/${guid}/energy/daily` : null,
+    energyFetcher,
   );
 
   // Filter configs based on available device properties
@@ -419,55 +457,49 @@ export default function DeviceDetailPage() {
         </Box>
       )}
 
-      {/* Monthly Energy Consumption — unaffected by time range selector */}
+      {/* Energy Charts — unaffected by time range selector */}
       {hasEnergy && (
         <Box mb={4}>
           <Typography variant="h5" gutterBottom mb={2}>
-            Monthly Energy Usage
+            Energy Usage History
           </Typography>
-          <Card>
+
+          {/* Monthly — full width */}
+          <Card sx={{ mb: 3 }}>
             <CardContent>
               <ReactECharts
-                option={{
-                  tooltip: {
-                    trigger: "axis",
-                    axisPointer: { type: "shadow" },
-                    formatter: (params: any) => {
-                      const p = params[0];
-                      return `${p.name}<br/>Energy: ${p.value} kWh`;
-                    },
-                  },
-                  grid: { left: "5%", right: "4%", bottom: "10%", containLabel: true },
-                  xAxis: {
-                    type: "category",
-                    data: monthlyEnergy.map((d: any) => d.name),
-                    axisLabel: { rotate: 30 },
-                  },
-                  yAxis: {
-                    type: "value",
-                    name: "kWh",
-                    nameLocation: "middle",
-                    nameGap: 50,
-                  },
-                  series: [
-                    {
-                      type: "bar",
-                      data: monthlyEnergy.map((d: any) => d.value),
-                      itemStyle: { color: "#4caf50" },
-                      label: {
-                        show: true,
-                        position: "top",
-                        formatter: "{c} kWh",
-                        fontSize: 11,
-                      },
-                      barMaxWidth: 50,
-                    },
-                  ],
-                }}
-                style={{ height: "320px" }}
+                option={buildEnergyBarOption(monthlyEnergy, "Monthly — Last 12 Months", "#5470c6")}
+                style={{ height: "300px" }}
+                notMerge
               />
             </CardContent>
           </Card>
+
+          {/* Weekly + Daily — side by side */}
+          <Grid container spacing={3}>
+            <Grid item xs={12} lg={6}>
+              <Card>
+                <CardContent>
+                  <ReactECharts
+                    option={buildEnergyBarOption(weeklyEnergy, "Weekly — Last 12 Complete Weeks", "#91cc75")}
+                    style={{ height: "280px" }}
+                    notMerge
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} lg={6}>
+              <Card>
+                <CardContent>
+                  <ReactECharts
+                    option={buildEnergyBarOption(dailyEnergy, "Daily — Last 30 Days", "#ee6666")}
+                    style={{ height: "280px" }}
+                    notMerge
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
         </Box>
       )}
 
