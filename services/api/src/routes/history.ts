@@ -71,6 +71,64 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       }
     },
   );
+  // Monthly energy consumption for a single device — last 12 months
+  fastify.get(
+    "/api/devices/:controller/:guid/energy/monthly",
+    async (request: any, reply) => {
+      const { guid, controller } = request.params;
+
+      const controllerName = config.controllers.find(
+        (c) => c.name === controller,
+      )?.username;
+      if (!controllerName) {
+        return reply.code(404).send({ error: "Controller not found" });
+      }
+
+      const safeGuid = validateTag(guid, "guid");
+
+      // Use 1d windows to avoid the InfluxDB Arrow panic with 1mo aggregateWindow.
+      // Monthly grouping is done in JS.
+      const fluxQuery = `
+        from(bucket: "${config.influx.bucket}")
+          |> range(start: -365d)
+          |> filter(fn: (r) => r._measurement == "dali_property")
+          |> filter(fn: (r) => r.device_guid == "${safeGuid}"
+                  and r.property == "driverEnergyConsumption"
+                  and r.controller == "${controllerName}"
+                  and r._field == "value_num")
+          |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+          |> difference(nonNegative: true)
+          |> filter(fn: (r) => exists r._value)
+          |> keep(columns: ["_time", "_value"])
+      `;
+
+      try {
+        const rows = await queryApi.collectRows<{ _time: string; _value: number }>(fluxQuery);
+
+        const monthly: Record<string, number> = {};
+        for (const row of rows) {
+          const d = new Date(row._time);
+          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          monthly[key] = (monthly[key] ?? 0) + row._value;
+        }
+
+        return Object.entries(monthly)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => {
+            const [year, month] = key.split("-").map(Number);
+            const name = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
+              month: "short",
+              year: "numeric",
+              timeZone: "UTC",
+            });
+            return { name, value: +(value / 1000).toFixed(3) };
+          });
+      } catch (err) {
+        request.log.error(err);
+        return reply.code(500).send({ error: "Database error" });
+      }
+    },
+  );
 }
 
 function validateTag(value: string, label: string): string {

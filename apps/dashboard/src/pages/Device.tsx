@@ -25,6 +25,7 @@ import {
   AccessTime as TimeIcon,
 } from "@mui/icons-material";
 import { apiFetch } from "../lib/apiClient";
+import useSWR from "swr";
 import PropertyValue from "../components/PropertyValue";
 import StatCard from "../components/StatCard";
 import TimeRangeSelector from "../components/TimeRangeSelector";
@@ -146,6 +147,15 @@ export default function DeviceDetailPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("24h");
+
+  const hasEnergy = device?.properties.includes("driverEnergyConsumption");
+  const { data: monthlyEnergy = [] } = useSWR(
+    hasEnergy ? `/api/devices/${controller}/${guid}/energy/monthly` : null,
+    async (url: string) => {
+      const res = await apiFetch(url);
+      return res.ok ? res.json() : [];
+    },
+  );
 
   // Filter configs based on available device properties
   const availableCharts = useMemo(
@@ -406,6 +416,58 @@ export default function DeviceDetailPage() {
               );
             })}
           </Grid>
+        </Box>
+      )}
+
+      {/* Monthly Energy Consumption — unaffected by time range selector */}
+      {hasEnergy && (
+        <Box mb={4}>
+          <Typography variant="h5" gutterBottom mb={2}>
+            Monthly Energy Usage
+          </Typography>
+          <Card>
+            <CardContent>
+              <ReactECharts
+                option={{
+                  tooltip: {
+                    trigger: "axis",
+                    axisPointer: { type: "shadow" },
+                    formatter: (params: any) => {
+                      const p = params[0];
+                      return `${p.name}<br/>Energy: ${p.value} kWh`;
+                    },
+                  },
+                  grid: { left: "5%", right: "4%", bottom: "10%", containLabel: true },
+                  xAxis: {
+                    type: "category",
+                    data: monthlyEnergy.map((d: any) => d.name),
+                    axisLabel: { rotate: 30 },
+                  },
+                  yAxis: {
+                    type: "value",
+                    name: "kWh",
+                    nameLocation: "middle",
+                    nameGap: 50,
+                  },
+                  series: [
+                    {
+                      type: "bar",
+                      data: monthlyEnergy.map((d: any) => d.value),
+                      itemStyle: { color: "#4caf50" },
+                      label: {
+                        show: true,
+                        position: "top",
+                        formatter: "{c} kWh",
+                        fontSize: 11,
+                      },
+                      barMaxWidth: 50,
+                    },
+                  ],
+                }}
+                style={{ height: "320px" }}
+              />
+            </CardContent>
+          </Card>
         </Box>
       )}
 
