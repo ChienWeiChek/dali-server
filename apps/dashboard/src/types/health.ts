@@ -10,6 +10,7 @@ export interface ControllerHealth extends ServiceHealth {
 export interface HealthCheckResponse {
   status: 'healthy' | 'unhealthy';
   timestamp: string;
+  version: string;
   services: {
     mqtt: ServiceHealth;
     influxdb: ServiceHealth;

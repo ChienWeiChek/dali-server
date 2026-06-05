@@ -1,6 +1,88 @@
 import { useHealthCheck } from '../hooks/useHealthCheck';
 import type { OverallHealthStatus, ServiceHealth, ControllerHealth } from '../types/health';
 
+interface VersionInfoProps {
+  apiVersion: string;
+}
+
+function VersionInfo({ apiVersion }: VersionInfoProps) {
+  const dashboardVersion = import.meta.env.VITE_VERSION || 'unknown';
+  const versionMismatch = dashboardVersion !== apiVersion;
+
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
+  return (
+    <div
+      className={`rounded-lg border-2 p-6 ${
+        versionMismatch
+          ? 'bg-yellow-50 border-yellow-300'
+          : 'bg-blue-50 border-blue-200'
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            Version Information
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <span className="text-sm text-gray-600">Dashboard:</span>
+              <span className="ml-2 font-mono font-medium text-gray-900">
+                v{dashboardVersion}
+              </span>
+            </div>
+            <div>
+              <span className="text-sm text-gray-600">API:</span>
+              <span className="ml-2 font-mono font-medium text-gray-900">
+                v{apiVersion}
+              </span>
+            </div>
+          </div>
+
+          {versionMismatch && (
+            <div className="rounded-md bg-yellow-100 p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl text-yellow-600">⚠️</span>
+                <div className="flex-1">
+                  <h4 className="font-medium text-yellow-900 mb-1">
+                    Version Mismatch Detected
+                  </h4>
+                  <p className="text-sm text-yellow-800 mb-3">
+                    Your browser may be using cached assets. The dashboard version
+                    (v{dashboardVersion}) doesn't match the API version (v{apiVersion}).
+                  </p>
+                  <button
+                    onClick={handleRefresh}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-200 border border-yellow-400 rounded-md text-sm font-medium text-yellow-900 hover:bg-yellow-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Refresh Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface StatusCardProps {
   title: string;
   status: 'healthy' | 'unhealthy';
@@ -213,6 +295,9 @@ export default function HealthCheck() {
         {/* Health Data */}
         {data && (
           <div className="space-y-8">
+            {/* Version Information */}
+            <VersionInfo apiVersion={data.version} />
+
             {/* Overall Status */}
             <OverallStatusCard
               status={status}

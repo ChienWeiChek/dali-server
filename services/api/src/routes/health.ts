@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { MqttSubscriber } from '../services/mqttSubscriber.js';
 import { InfluxWriter } from '../services/influxWriter.js';
 import { DaliClient } from '../controllers/daliClient.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 interface HealthCheckOptions {
   mqttSubscriber: MqttSubscriber;
@@ -21,6 +22,7 @@ interface ControllerHealth extends ServiceHealth {
 interface HealthCheckResponse {
   status: 'healthy' | 'unhealthy';
   timestamp: string;
+  version: string;
   services: {
     mqtt: ServiceHealth;
     influxdb: ServiceHealth;
@@ -116,6 +118,7 @@ export default async function healthRoutes(
     const response: HealthCheckResponse = {
       status: overallStatus,
       timestamp,
+      version: pkg.version,
       services: {
         mqtt: mqttHealth,
         influxdb: influxHealth,
