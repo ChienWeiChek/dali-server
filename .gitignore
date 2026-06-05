@@ -28,3 +28,4 @@ Thumbs.db
 
 # InfluxDB Data (Docker volume)
 infrastructure/influx/data
+.claude/settings.local.json
