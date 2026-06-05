@@ -5,6 +5,7 @@ import { loadConfig } from "./config/loader.js";
 import { InfluxWriter } from "./services/influxWriter.js";
 // import { PollerService } from './services/poller.js';
 import { MqttSubscriber } from "./services/mqttSubscriber.js";
+import { CacheService } from "./services/cacheService.js";
 import { DaliClient } from "./controllers/daliClient.js";
 import deviceRoutes from "./routes/devices.js";
 import historyRoutes from "./routes/history.js";
@@ -28,13 +29,15 @@ const start = async () => {
     // const poller = new PollerService(config, influxWriter);
     // poller.start();
 
+    const cacheService = new CacheService(config.cache);
+
     const clients = config.controllers.map((c) => new DaliClient(c));
     const mqttSubscriber = new MqttSubscriber(
       config.mqtt,
       influxWriter,
       clients,
     );
-    mqttSubscriber.connect();
+    // mqttSubscriber.connect();
 
     await fastify.register(cors);
     // await fastify.register(websocket);
@@ -47,8 +50,8 @@ const start = async () => {
     });
     await fastify.register(deviceRoutes, { daliClients: clients });
     await fastify.register(groupsRoutes, { daliClients: clients });
-    await fastify.register(historyRoutes);
-    await fastify.register(metricsRoutes);
+    await fastify.register(historyRoutes, { cacheService });
+    await fastify.register(metricsRoutes, { cacheService });
     await fastify.register(mqttRoutes, { daliClients: clients });
 
     fastify.get("/api/config", async () => {

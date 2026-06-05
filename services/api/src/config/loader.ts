@@ -31,6 +31,9 @@ export async function loadConfig(): Promise<AppConfig> {
   const authRaw = await fs.readFile(authPath, 'utf-8');
   const auth: AuthConfig = JSON.parse(authRaw);
 
+  const excludedRoutesStr = process.env.CACHE_EXCLUDED_ROUTES || '/api/devices/metrics/aggregate,/api/devices/real-time-data';
+  const excludedRoutes = excludedRoutesStr.split(',').map(r => r.trim()).filter(Boolean);
+
   return {
     controllers,
     auth,
@@ -50,6 +53,11 @@ export async function loadConfig(): Promise<AppConfig> {
     },
     server: {
       port: parseInt(process.env.API_PORT || '3000', 10),
+    },
+    cache: {
+      ttlMinutes: parseInt(process.env.CACHE_TTL_MINUTES || '15', 10),
+      maxEntries: parseInt(process.env.CACHE_MAX_ENTRIES || '1000', 10),
+      excludedRoutes,
     },
   };
 }

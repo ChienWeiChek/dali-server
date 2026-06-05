@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
+import { CacheService } from "../services/cacheService.js";
 import { rangeToWindow, validateRange, isoWeekKey, isoWeekLabel } from "../utils/influxHelpers.js";
 import { localDayStr, localMonthStartStr, localMidnightUTC } from "../utils/tzHelpers.js";
 interface Row {
@@ -22,8 +23,12 @@ interface Result {
   controller: ControllerData[];
 }
 
-export default async function metricsRoutes(fastify: FastifyInstance) {
+export default async function metricsRoutes(
+  fastify: FastifyInstance,
+  opts: { cacheService: CacheService },
+) {
   const config = await loadConfig();
+  const { cacheService } = opts;
   const queryApi = new InfluxDB({
     url: config.influx.url,
     token: config.influx.token,
@@ -182,6 +187,13 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
 
   // Energy summary endpoint
   fastify.get("/api/devices/energy-summary", async (request: any, reply) => {
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-summary", {});
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     try {
       const query = `
         from(bucket: "${config.influx.bucket}")
@@ -189,7 +201,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           |> filter(fn: (r) => r._measurement == "dali_property")
           |> filter(fn: (r) => r.property == "driverEnergyConsumption")
           |> group(columns: ["device_guid", "controller", "unit"])
-          |> keep(columns: ["controller", "device_guid","_value","unit"])  
+          |> keep(columns: ["controller", "device_guid","_value","unit"])
           |> last()
           |> group(columns: ["controller"])
           |> sum(column: "_value")
@@ -197,7 +209,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
       `;
 
       const rows = await queryApi.collectRows(query);
-      return {
+      const result = {
         total: rows.reduce((acc, row: any) => acc + (row._value || 0), 0),
         unit: "Wh",
         controller: rows.map((row: any) => ({
@@ -206,6 +218,10 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           unit: row.unit || "Wh",
         })),
       };
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch energy summary" });
@@ -216,18 +232,25 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
   fastify.get(
     "/api/devices/driver-temperature",
     async (request: any, reply) => {
+      // Check cache
+      const cacheKey = cacheService.buildQueryKey("driver-temperature", {});
+      const cached = cacheService.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
+
       try {
         const query = `
         from(bucket: "${config.influx.bucket}")
           |> range(start:-30d)
           |> filter(fn: (r) => r._measurement == "dali_property")
           |> filter(fn: (r) => r.property == "driverTemperature")
-          |> keep(columns: ["controller","_value","unit","property"])  
+          |> keep(columns: ["controller","_value","unit","property"])
           |> mean()
       `;
 
         const rows = await queryApi.collectRows(query);
-        return {
+        const result = {
           avg:
             rows.length > 0
               ? (
@@ -244,6 +267,10 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
             unit: row.unit || "°C",
           })),
         };
+
+        // Cache successful response
+        cacheService.set(cacheKey, result);
+        return result;
       } catch (err) {
         fastify.log.error(err);
         return reply
@@ -333,6 +360,16 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
       const validRange = validateRange(range);
       const window = rangeToWindow(validRange);
 
+      // Check cache
+      const cacheKey = cacheService.buildQueryKey("history-aggregate", {
+        property,
+        range: validRange,
+      });
+      const cached = cacheService.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
+
       try {
         // aggregateWindow buckets data into equal time intervals, then we
         // group all devices together and take the cross-device mean per bucket.
@@ -354,10 +391,14 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           _value: number;
         }>(query);
 
-        return rows.map((row) => ({
+        const result = rows.map((row) => ({
           time: row._time,
           value: +row._value.toFixed(2),
         }));
+
+        // Cache successful response
+        cacheService.set(cacheKey, result);
+        return result;
       } catch (err) {
         fastify.log.error(err);
         return reply
@@ -371,6 +412,15 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/devices/energy-by-device", async (request: any, reply) => {
     const { range = "30d" } = request.query as { range?: string };
     const validRange = validateRange(range, "30d");
+
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-by-device", {
+      range: validRange,
+    });
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
 
     try {
       // driverEnergyConsumption is a cumulative counter (odometer-style).
@@ -401,7 +451,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         _value: number;
       }>(query);
 
-      return rows
+      const result = rows
         .map((row) => ({
           name: row.title
             ? `${row.controller} - ${row.title}`
@@ -411,6 +461,10 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 10);
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply
@@ -424,6 +478,15 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
     const { range = "24h" } = request.query as { range?: string };
     const validRange = validateRange(range);
     const window = rangeToWindow(validRange);
+
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-trend", {
+      range: validRange,
+    });
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
 
     try {
       // Per device: bucket into windows (last), compute per-window delta.
@@ -449,9 +512,13 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         byTime[row._time] = (byTime[row._time] ?? 0) + row._value;
       }
 
-      return Object.entries(byTime)
+      const result = Object.entries(byTime)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([time, value]) => ({ time, value: +value.toFixed(4) }));
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch energy trend" });
@@ -462,6 +529,16 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/devices/energy/monthly", async (request: any, reply) => {
     const { guids } = request.query as { guids?: string };
     const guidFilter = buildGuidFilter(guids);
+
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-monthly", {
+      guids: guids || "all-devices",
+    });
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     try {
       const query = `
         from(bucket: "${config.influx.bucket}")
@@ -483,7 +560,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
         monthly[key] = (monthly[key] ?? 0) + row._value;
       }
-      return Object.entries(monthly)
+      const result = Object.entries(monthly)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => {
           const [year, month] = key.split("-").map(Number);
@@ -492,6 +569,10 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           });
           return { name, value: +(value / 1000).toFixed(3) };
         });
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch monthly energy" });
@@ -502,6 +583,16 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/devices/energy/weekly", async (request: any, reply) => {
     const { guids } = request.query as { guids?: string };
     const guidFilter = buildGuidFilter(guids);
+
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-weekly", {
+      guids: guids || "all-devices",
+    });
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     try {
       const query = `
         from(bucket: "${config.influx.bucket}")
@@ -523,7 +614,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         weekly[key] = (weekly[key] ?? 0) + row._value;
       }
       const currentWeek = isoWeekKey(new Date());
-      return Object.entries(weekly)
+      const result = Object.entries(weekly)
         .filter(([key]) => key !== currentWeek)
         .sort(([a], [b]) => a.localeCompare(b))
         .slice(-12)
@@ -531,6 +622,10 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           name: isoWeekLabel(key),
           value: +(value / 1000).toFixed(3),
         }));
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch weekly energy" });
@@ -541,6 +636,16 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/devices/energy/daily", async (request: any, reply) => {
     const { guids } = request.query as { guids?: string };
     const guidFilter = buildGuidFilter(guids);
+
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-daily", {
+      guids: guids || "all-devices",
+    });
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     try {
       const query = `
         from(bucket: "${config.influx.bucket}")
@@ -562,7 +667,7 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
         const key = d.toISOString().slice(0, 10);
         daily[key] = (daily[key] ?? 0) + row._value;
       }
-      return Object.entries(daily)
+      const result = Object.entries(daily)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => ({
           name: new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -570,6 +675,10 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           }),
           value: +(value / 1000).toFixed(3),
         }));
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch daily energy" });
@@ -580,6 +689,17 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/devices/energy/stats", async (request: any, reply) => {
     const { tz = "UTC", guids } = request.query as { tz?: string; guids?: string };
     const guidFilter = buildGuidFilter(guids);
+
+    // Check cache
+    const cacheKey = cacheService.buildQueryKey("energy-stats", {
+      tz,
+      guids: guids || "all-devices",
+    });
+    const cached = cacheService.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     const now = new Date();
 
     const startOfToday      = localMidnightUTC(tz, localDayStr(tz, 0));
@@ -621,12 +741,16 @@ export default async function metricsRoutes(fastify: FastifyInstance) {
           queryPeriod(startOf2MonthsAgo, startOfLastMonth, "1d"),
         ]);
 
-      return {
+      const result = {
         today:        { wh: today,        changePercent: pct(today, yesterday)   },
         yesterday:    { wh: yesterday,    changePercent: pct(yesterday, dayBefore) },
         currentMonth: { wh: currentMonth, changePercent: pct(currentMonth, lastMonth) },
         lastMonth:    { wh: lastMonth,    changePercent: pct(lastMonth, monthBefore)  },
       };
+
+      // Cache successful response
+      cacheService.set(cacheKey, result);
+      return result;
     } catch (err) {
       fastify.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch energy stats" });

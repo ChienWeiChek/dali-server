@@ -19,6 +19,12 @@ export interface MqttConfig {
   topic: string;
 }
 
+export interface CacheConfig {
+  ttlMinutes: number;
+  maxEntries: number;
+  excludedRoutes: string[];
+}
+
 export interface AppConfig {
   controllers: ControllerConfig[];
   auth: AuthConfig;
@@ -34,6 +40,7 @@ export interface AppConfig {
   server: {
     port: number;
   };
+  cache: CacheConfig;
 }
 
 export interface DaliDevice {

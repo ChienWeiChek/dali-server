@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
+import { CacheService } from "../services/cacheService.js";
 import {
   validateRange,
   rangeToWindow,
@@ -10,8 +11,12 @@ import {
   validateTag,
 } from "../utils/influxHelpers.js";
 
-export default async function historyRoutes(fastify: FastifyInstance) {
+export default async function historyRoutes(
+  fastify: FastifyInstance,
+  opts: { cacheService: CacheService },
+) {
   const config = await loadConfig();
+  const { cacheService } = opts;
   const queryApi = new InfluxDB({
     url: config.influx.url,
     token: config.influx.token,
@@ -32,6 +37,18 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       }
       if (!property) {
         return reply.code(400).send({ error: "Property is required" });
+      }
+
+      // Check cache
+      const cacheKey = cacheService.buildHistoryKey(
+        controller,
+        guid,
+        property,
+        range,
+      );
+      const cached = cacheService.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
       }
 
       const safeGuid = validateTag(guid, "guid");
@@ -71,6 +88,8 @@ export default async function historyRoutes(fastify: FastifyInstance) {
 
       try {
         const rows = await queryApi.collectRows(fluxQuery);
+        // Cache successful response
+        cacheService.set(cacheKey, rows);
         return rows;
       } catch (err) {
         request.log.error(err);
@@ -89,6 +108,13 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       )?.username;
       if (!controllerName) {
         return reply.code(404).send({ error: "Controller not found" });
+      }
+
+      // Check cache
+      const cacheKey = cacheService.buildEnergyKey("monthly", controller, guid);
+      const cached = cacheService.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
       }
 
       const safeGuid = validateTag(guid, "guid");
@@ -122,7 +148,7 @@ export default async function historyRoutes(fastify: FastifyInstance) {
           monthly[key] = (monthly[key] ?? 0) + row._value;
         }
 
-        return Object.entries(monthly)
+        const result = Object.entries(monthly)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([key, value]) => {
             const [year, month] = key.split("-").map(Number);
@@ -135,6 +161,10 @@ export default async function historyRoutes(fastify: FastifyInstance) {
             });
             return { name, value: +(value / 1000).toFixed(3) };
           });
+
+        // Cache successful response
+        cacheService.set(cacheKey, result);
+        return result;
       } catch (err) {
         request.log.error(err);
         return reply.code(500).send({ error: "Database error" });
@@ -152,6 +182,13 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       )?.username;
       if (!controllerName)
         return reply.code(404).send({ error: "Controller not found" });
+
+      // Check cache
+      const cacheKey = cacheService.buildEnergyKey("weekly", controller, guid);
+      const cached = cacheService.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
 
       const safeGuid = validateTag(guid, "guid");
       const fluxQuery = `
@@ -178,7 +215,7 @@ export default async function historyRoutes(fastify: FastifyInstance) {
           weekly[key] = (weekly[key] ?? 0) + row._value;
         }
         const currentWeek = isoWeekKey(new Date());
-        return Object.entries(weekly)
+        const result = Object.entries(weekly)
           .filter(([key]) => key !== currentWeek)
           .sort(([a], [b]) => a.localeCompare(b))
           .slice(-12)
@@ -186,6 +223,10 @@ export default async function historyRoutes(fastify: FastifyInstance) {
             name: isoWeekLabel(key),
             value: +(value / 1000).toFixed(3),
           }));
+
+        // Cache successful response
+        cacheService.set(cacheKey, result);
+        return result;
       } catch (err) {
         request.log.error(err);
         return reply.code(500).send({ error: "Database error" });
@@ -203,6 +244,13 @@ export default async function historyRoutes(fastify: FastifyInstance) {
       )?.username;
       if (!controllerName)
         return reply.code(404).send({ error: "Controller not found" });
+
+      // Check cache
+      const cacheKey = cacheService.buildEnergyKey("daily", controller, guid);
+      const cached = cacheService.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
 
       const safeGuid = validateTag(guid, "guid");
       const fluxQuery = `
@@ -228,7 +276,7 @@ export default async function historyRoutes(fastify: FastifyInstance) {
           const key = new Date(row._time).toISOString().slice(0, 10);
           daily[key] = (daily[key] ?? 0) + row._value;
         }
-        return Object.entries(daily)
+        const result = Object.entries(daily)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([key, value]) => ({
             name: new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -238,6 +286,10 @@ export default async function historyRoutes(fastify: FastifyInstance) {
             }),
             value: +(value / 1000).toFixed(3),
           }));
+
+        // Cache successful response
+        cacheService.set(cacheKey, result);
+        return result;
       } catch (err) {
         request.log.error(err);
         return reply.code(500).send({ error: "Database error" });
