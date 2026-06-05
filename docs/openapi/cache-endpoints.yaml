@@ -1,0 +1,243 @@
+openapi: 3.0.3
+info:
+  title: DALI Server - Cache Debugging API
+  description: |
+    Cache debugging endpoints for monitoring and managing the LRU cache service.
+
+    **Security Note:** These endpoints are automatically enabled in development mode.
+    For production, set `ENABLE_CACHE_DEBUG=true` in your environment variables.
+  version: 1.0.0
+  contact:
+    name: DALI Server API
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: http://localhost:80
+    description: Docker deployment (via Nginx)
+
+tags:
+  - name: Cache
+    description: Cache debugging and management operations
+
+paths:
+  /api/cache/keys:
+    get:
+      tags:
+        - Cache
+      summary: List all cache keys
+      description: Returns an array of all cache key strings currently stored in the LRU cache.
+      operationId: listCacheKeys
+      responses:
+        '200':
+          description: Successfully retrieved cache keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+              examples:
+                example1:
+                  summary: Cache keys example
+                  value:
+                    - "history:controller1:abc-123:driverEnergyConsumption:24h"
+                    - "energy:monthly:controller1:def-456"
+                    - "energy-monthly:guids=abc,def,xyz"
+                    - "history-aggregate:property=temperature:range=7d"
+
+  /api/cache/stats:
+    get:
+      tags:
+        - Cache
+      summary: Get cache statistics
+      description: Returns current cache metrics including size, maximum entries, and TTL configuration.
+      operationId: getCacheStats
+      responses:
+        '200':
+          description: Successfully retrieved cache statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  size:
+                    type: integer
+                    description: Current number of entries in cache
+                    example: 42
+                  maxEntries:
+                    type: integer
+                    description: Maximum allowed cache entries
+                    example: 1000
+                  ttlMinutes:
+                    type: number
+                    description: Time-to-live in minutes for cache entries
+                    example: 15
+
+  /api/cache/entry:
+    get:
+      tags:
+        - Cache
+      summary: Get cached value by key
+      description: Retrieves the cached value for a specific key along with remaining TTL metadata.
+      operationId: getCacheEntry
+      parameters:
+        - name: key
+          in: query
+          required: true
+          description: The cache key to retrieve
+          schema:
+            type: string
+          examples:
+            historyKey:
+              summary: History endpoint key
+              value: "history:controller1:abc-123:driverEnergyConsumption:24h"
+            energyKey:
+              summary: Energy endpoint key
+              value: "energy:monthly:controller1:def-456"
+      responses:
+        '200':
+          description: Successfully retrieved cached entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    description: The cache key
+                  value:
+                    description: The cached data (structure varies by endpoint)
+                  metadata:
+                    type: object
+                    properties:
+                      remainingTtlMs:
+                        type: integer
+                        description: Remaining time-to-live in milliseconds
+              examples:
+                historyExample:
+                  summary: History data example
+                  value:
+                    key: "history:controller1:abc-123:temperature:24h"
+                    value:
+                      - _time: "2026-06-05T00:00:00Z"
+                        value_num: 42.5
+                        unit: "°C"
+                        device_guid: "abc-123"
+                        property: "temperature"
+                      - _time: "2026-06-05T01:00:00Z"
+                        value_num: 43.2
+                        unit: "°C"
+                        device_guid: "abc-123"
+                        property: "temperature"
+                    metadata:
+                      remainingTtlMs: 845000
+                energyExample:
+                  summary: Monthly energy data example
+                  value:
+                    key: "energy:monthly:controller1:def-456"
+                    value:
+                      - name: "May 2026"
+                        value: 125.3
+                      - name: "Jun 2026"
+                        value: 98.7
+                    metadata:
+                      remainingTtlMs: 720000
+        '400':
+          description: Missing required 'key' query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Query parameter 'key' is required"
+        '404':
+          description: Cache key not found (expired or never existed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Cache key not found"
+
+    delete:
+      tags:
+        - Cache
+      summary: Delete cached entry by key
+      description: Removes a specific cache entry. Returns 404 if the key doesn't exist or has already expired.
+      operationId: deleteCacheEntry
+      parameters:
+        - name: key
+          in: query
+          required: true
+          description: The cache key to delete
+          schema:
+            type: string
+          examples:
+            historyKey:
+              summary: History endpoint key
+              value: "history:controller1:abc-123:driverEnergyConsumption:24h"
+      responses:
+        '200':
+          description: Successfully deleted cache entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  key:
+                    type: string
+                    example: "history:controller1:abc-123:driverEnergyConsumption:24h"
+        '400':
+          description: Missing required 'key' query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Query parameter 'key' is required"
+        '404':
+          description: Cache key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Cache key not found"
+
+  /api/cache/clear:
+    post:
+      tags:
+        - Cache
+      summary: Clear all cache entries
+      description: Removes all entries from the cache and returns the count of cleared entries.
+      operationId: clearCache
+      responses:
+        '200':
+          description: Successfully cleared all cache entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  clearedCount:
+                    type: integer
+                    description: Number of entries that were removed
+                    example: 42
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error

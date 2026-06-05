@@ -13,6 +13,7 @@ import groupsRoutes from "./routes/groups.js";
 import healthRoutes from "./routes/health.js";
 import metricsRoutes from "./routes/metrics.js";
 import mqttRoutes from "./routes/mqtt.js";
+import cacheRoutes from "./routes/cache.js";
 
 const start = async () => {
   try {
@@ -53,6 +54,15 @@ const start = async () => {
     await fastify.register(historyRoutes, { cacheService });
     await fastify.register(metricsRoutes, { cacheService });
     await fastify.register(mqttRoutes, { daliClients: clients });
+
+    // Register cache debugging routes if enabled
+    const enableCacheDebug =
+      process.env.NODE_ENV !== "production" ||
+      process.env.ENABLE_CACHE_DEBUG === "true";
+    if (enableCacheDebug) {
+      await fastify.register(cacheRoutes, { cacheService });
+      fastify.log.info("Cache debugging endpoints enabled");
+    }
 
     fastify.get("/api/config", async () => {
       return {

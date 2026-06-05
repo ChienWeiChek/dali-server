@@ -94,8 +94,31 @@ export class CacheService {
   /**
    * Clear all cached entries
    */
-  clear(): void {
+  clear(): number {
+    const count = this.cache.size;
     this.cache.clear();
+    return count;
+  }
+
+  /**
+   * Delete a specific cache entry by key
+   */
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
+
+  /**
+   * Get all cache keys
+   */
+  keys(): string[] {
+    return Array.from(this.cache.keys());
+  }
+
+  /**
+   * Get remaining TTL for a specific key in milliseconds
+   */
+  getRemainingTTL(key: string): number {
+    return this.cache.getRemainingTTL(key) ?? 0;
   }
 
   /**
