@@ -1,6 +1,6 @@
 {
   "name": "dali-iot-dashboard",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "IoT Dashboard for DALI Lighting Controllers",
   "private": true,
   "workspaces": [
