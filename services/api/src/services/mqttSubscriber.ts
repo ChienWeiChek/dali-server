@@ -140,6 +140,9 @@ export class MqttSubscriber {
 
       // Parse timestamp from payload date ("2026.06.04") and time ("11:29:01")
       // MQTT_TIMEZONE_OFFSET controls the source timezone (default: +08:00)
+
+      //eg payload.date = "2026.06.04"
+      //eg payload.time = "11:29:01"
       const tzOffset = process.env.MQTT_TIMEZONE_OFFSET || '+08:00';
       let timestamp: Date;
       if (payload.date && payload.time) {

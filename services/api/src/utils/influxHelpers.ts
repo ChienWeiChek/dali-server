@@ -46,6 +46,26 @@ export function validateRange(range: string, defaultRange = "24h"): string {
   return defaultRange;
 }
 
+/**
+ * Converts an InfluxDB duration string (e.g. "6m", "1h", "2d") to milliseconds.
+ * Used to compute the maximum allowed time gap between consecutive data points
+ * before treating a difference() value as a post-gap spike.
+ */
+export function parseWindowToMs(window: string): number {
+  const match = window.match(/^(\d+)(s|m|h|d|w)$/i);
+  if (!match) return 6 * 60 * 1000; // default 6 minutes
+  const value = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  const toMs: Record<string, number> = {
+    s: 1_000,
+    m: 60_000,
+    h: 3_600_000,
+    d: 86_400_000,
+    w: 604_800_000,
+  };
+  return value * (toMs[unit] ?? 60_000);
+}
+
 /** Validates and returns a safe InfluxDB tag value (alphanumeric, colon, underscore, hyphen). */
 export function validateTag(value: string, label: string): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9:_\-]+$/.test(value)) {

@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest } from "fastify";
 import { InfluxDB } from "@influxdata/influxdb-client";
 import { loadConfig } from "../config/loader.js";
 import { CacheService } from "../services/cacheService.js";
-import { rangeToWindow, validateRange, isoWeekKey, isoWeekLabel } from "../utils/influxHelpers.js";
+import { rangeToWindow, validateRange, parseWindowToMs, isoWeekKey, isoWeekLabel } from "../utils/influxHelpers.js";
 import { localDayStr, localMonthStartStr, localMidnightUTC } from "../utils/tzHelpers.js";
 interface Row {
   controller: string;
@@ -32,6 +32,7 @@ export default async function metricsRoutes(
   const queryApi = new InfluxDB({
     url: config.influx.url,
     token: config.influx.token,
+    timeout: 60_000, // 60 s — long-range queries (monthly, 365 d) need more than the 10 s default
   }).getQueryApi(config.influx.org);
 
   // Aggregate metrics endpoint TOD
@@ -492,6 +493,9 @@ export default async function metricsRoutes(
       // Per device: bucket into windows (last), compute per-window delta.
       // Cross-device sum is done in JS to avoid InfluxDB Arrow panic on
       // cross-table aggregations (group(columns:["_time"]) |> sum()).
+      // Retain device_guid so JS can do per-device gap detection before summing.
+      // Dropping it via |> keep() loses the ability to detect per-device data gaps,
+      // causing spikes when a device goes offline and resumes (see Option C rationale).
       const query = `
         from(bucket: "${config.influx.bucket}")
           |> range(start: -${validRange})
@@ -502,14 +506,45 @@ export default async function metricsRoutes(
           |> aggregateWindow(every: ${window}, fn: max, createEmpty: true)
           |> difference(nonNegative: true)
           |> filter(fn: (r) => exists r._value)
-          |> keep(columns: ["_time", "_value"])
+          |> keep(columns: ["_time", "_value", "device_guid"])
       `;
 
-      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
+      const rows = await queryApi.collectRows<{
+        _time: string;
+        _value: number;
+        device_guid: string;
+      }>(query);
 
-      const byTime: Record<string, number> = {};
+      // Per-device gap detection (Option C):
+      // When a device goes offline, InfluxDB fills windows with null. On resume,
+      // difference() compresses all accumulated consumption into one bucket → spike.
+      // Fix: group rows by device, sort by time, and zero any value where the gap
+      // to the previous row exceeds 2× the aggregation window.
+      const windowMs = parseWindowToMs(window);
+      const maxGapMs = 2 * windowMs;
+
+      // Build per-device sorted lists
+      const byDevice: Record<string, { time: string; value: number }[]> = {};
       for (const row of rows) {
-        byTime[row._time] = (byTime[row._time] ?? 0) + row._value;
+        if (!byDevice[row.device_guid]) byDevice[row.device_guid] = [];
+        byDevice[row.device_guid].push({ time: row._time, value: row._value });
+      }
+
+      // Sum across devices, zeroing post-gap spikes per device
+      const byTime: Record<string, number> = {};
+      for (const deviceRows of Object.values(byDevice)) {
+        const sorted = deviceRows.sort((a, b) => a.time.localeCompare(b.time));
+        for (let i = 0; i < sorted.length; i++) {
+          const gapMs =
+            i === 0
+              ? 0
+              : new Date(sorted[i].time).getTime() -
+                new Date(sorted[i - 1].time).getTime();
+          // Zero this window's contribution if the preceding gap is too large —
+          // the value would be a spike accumulated during the offline period.
+          const value = gapMs > maxGapMs ? 0 : sorted[i].value;
+          byTime[sorted[i].time] = (byTime[sorted[i].time] ?? 0) + value;
+        }
       }
 
       const result = Object.entries(byTime)
@@ -551,15 +586,41 @@ export default async function metricsRoutes(
           |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
           |> difference(nonNegative: true)
           |> filter(fn: (r) => exists r._value)
-          |> keep(columns: ["_time", "_value"])
+          |> keep(columns: ["_time", "_value", "device_guid"])
       `;
-      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
-      const monthly: Record<string, number> = {};
+      const rows = await queryApi.collectRows<{
+        _time: string;
+        _value: number;
+        device_guid: string;
+      }>(query);
+
+      // Per-device gap detection: zero any 1d window where the device was offline
+      // for more than a day (gap > 25h). Without this, difference() dumps all
+      // accumulated offline consumption into the first bucket after resumption.
+      const maxGapMs = 25 * 60 * 60 * 1000;
+
+      const byDeviceM: Record<string, { time: string; value: number }[]> = {};
       for (const row of rows) {
-        const d = new Date(row._time);
-        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-        monthly[key] = (monthly[key] ?? 0) + row._value;
+        if (!byDeviceM[row.device_guid]) byDeviceM[row.device_guid] = [];
+        byDeviceM[row.device_guid].push({ time: row._time, value: row._value });
       }
+
+      const monthly: Record<string, number> = {};
+      for (const deviceRows of Object.values(byDeviceM)) {
+        const sorted = deviceRows.sort((a, b) => a.time.localeCompare(b.time));
+        for (let i = 0; i < sorted.length; i++) {
+          const gapMs =
+            i === 0
+              ? 0
+              : new Date(sorted[i].time).getTime() -
+                new Date(sorted[i - 1].time).getTime();
+          const value = gapMs > maxGapMs ? 0 : sorted[i].value;
+          const d = new Date(sorted[i].time);
+          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          monthly[key] = (monthly[key] ?? 0) + value;
+        }
+      }
+
       const result = Object.entries(monthly)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => {
@@ -605,14 +666,39 @@ export default async function metricsRoutes(
           |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
           |> difference(nonNegative: true)
           |> filter(fn: (r) => exists r._value)
-          |> keep(columns: ["_time", "_value"])
+          |> keep(columns: ["_time", "_value", "device_guid"])
       `;
-      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
-      const weekly: Record<string, number> = {};
+      const rows = await queryApi.collectRows<{
+        _time: string;
+        _value: number;
+        device_guid: string;
+      }>(query);
+
+      // Per-device gap detection: same as daily/monthly — zero windows that span
+      // a gap larger than 1d to prevent post-offline spikes inflating weekly totals.
+      const maxGapMsW = 25 * 60 * 60 * 1000;
+
+      const byDeviceW: Record<string, { time: string; value: number }[]> = {};
       for (const row of rows) {
-        const key = isoWeekKey(new Date(row._time));
-        weekly[key] = (weekly[key] ?? 0) + row._value;
+        if (!byDeviceW[row.device_guid]) byDeviceW[row.device_guid] = [];
+        byDeviceW[row.device_guid].push({ time: row._time, value: row._value });
       }
+
+      const weekly: Record<string, number> = {};
+      for (const deviceRows of Object.values(byDeviceW)) {
+        const sorted = deviceRows.sort((a, b) => a.time.localeCompare(b.time));
+        for (let i = 0; i < sorted.length; i++) {
+          const gapMs =
+            i === 0
+              ? 0
+              : new Date(sorted[i].time).getTime() -
+                new Date(sorted[i - 1].time).getTime();
+          const value = gapMs > maxGapMsW ? 0 : sorted[i].value;
+          const key = isoWeekKey(new Date(sorted[i].time));
+          weekly[key] = (weekly[key] ?? 0) + value;
+        }
+      }
+
       const currentWeek = isoWeekKey(new Date());
       const result = Object.entries(weekly)
         .filter(([key]) => key !== currentWeek)
@@ -647,6 +733,9 @@ export default async function metricsRoutes(
     }
 
     try {
+      // Retain device_guid so we can do per-device gap detection before summing.
+      // A 1d window means any gap > 1 day is offline time — zeroing that window
+      // prevents accumulated consumption from dumping into the resumption bucket.
       const query = `
         from(bucket: "${config.influx.bucket}")
           |> range(start: -30d)
@@ -658,15 +747,40 @@ export default async function metricsRoutes(
           |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
           |> difference(nonNegative: true)
           |> filter(fn: (r) => exists r._value)
-          |> keep(columns: ["_time", "_value"])
+          |> keep(columns: ["_time", "_value", "device_guid"])
       `;
-      const rows = await queryApi.collectRows<{ _time: string; _value: number }>(query);
-      const daily: Record<string, number> = {};
+      const rows = await queryApi.collectRows<{
+        _time: string;
+        _value: number;
+        device_guid: string;
+      }>(query);
+
+      // Per-device gap detection: zero any window where the preceding gap > 1d + buffer.
+      // This catches devices that go offline for multiple days and resume — without this,
+      // difference() compresses all offline consumption into the first window after resumption.
+      const maxGapMs = 25 * 60 * 60 * 1000; // 1 day + 1 hour tolerance
+
+      const byDevice: Record<string, { time: string; value: number }[]> = {};
       for (const row of rows) {
-        const d = new Date(row._time);
-        const key = d.toISOString().slice(0, 10);
-        daily[key] = (daily[key] ?? 0) + row._value;
+        if (!byDevice[row.device_guid]) byDevice[row.device_guid] = [];
+        byDevice[row.device_guid].push({ time: row._time, value: row._value });
       }
+
+      const daily: Record<string, number> = {};
+      for (const deviceRows of Object.values(byDevice)) {
+        const sorted = deviceRows.sort((a, b) => a.time.localeCompare(b.time));
+        for (let i = 0; i < sorted.length; i++) {
+          const gapMs =
+            i === 0
+              ? 0
+              : new Date(sorted[i].time).getTime() -
+                new Date(sorted[i - 1].time).getTime();
+          const value = gapMs > maxGapMs ? 0 : sorted[i].value;
+          const key = new Date(sorted[i].time).toISOString().slice(0, 10);
+          daily[key] = (daily[key] ?? 0) + value;
+        }
+      }
+
       const result = Object.entries(daily)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => ({
