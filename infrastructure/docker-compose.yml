@@ -69,7 +69,7 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-admin123}
 
   influxdb2:
-    image: influxdb:2.7
+    image: influxdb:2.9.1
     restart: unless-stopped
     ports:
       - "8086:8086"
