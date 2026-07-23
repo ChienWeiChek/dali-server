@@ -35,10 +35,11 @@ function autoScale(wh: number): { value: string; unit: string } {
 }
 
 function buildBarOption(
-  data: { name: string; value: number }[],
+  data: { name: string; value: number }[] | null | undefined,
   title: string,
   color: string,
 ) {
+  const safeData = Array.isArray(data) ? data : [];
   return {
     title: { text: title, left: "center", textStyle: { fontSize: 14 } },
     tooltip: {
@@ -52,7 +53,7 @@ function buildBarOption(
     grid: { left: "4%", right: "4%", bottom: "15%", containLabel: true },
     xAxis: {
       type: "category",
-      data: data.map((d) => d.name),
+      data: safeData.map((d) => d.name),
       axisLabel: { rotate: 35, interval: 0, fontSize: 11 },
     },
     yAxis: {
@@ -64,7 +65,7 @@ function buildBarOption(
     series: [
       {
         type: "bar",
-        data: data.map((d) => d.value),
+        data: safeData.map((d) => d.value),
         itemStyle: { color },
         label: { show: true, position: "top", formatter: "{c}", fontSize: 10 },
         barMaxWidth: 40,
@@ -202,7 +203,7 @@ export default function EnergyUsage() {
   const qs = (extra = "") =>
     [guidParam, extra].filter(Boolean).join("&");
 
-  const fetcher = (url: string) => apiFetch(url).then((r) => (r.ok ? r.json() : null));
+  const fetcher = (url: string) => apiFetch(url).then((r) => (r.ok ? r.json() : undefined));
 
   const { data: monthlyData = [], isLoading: monthlyLoading } = useSWR(
     `/api/devices/energy/monthly${guidParam ? `?${guidParam}` : ""}`,
