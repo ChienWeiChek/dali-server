@@ -24,6 +24,11 @@ const start = async () => {
           target: "pino-pretty",
         },
       },
+      // Route-level connection timeout (ms). Heavy queries like /energy/monthly
+      // (365-day fan-out) can take well over 10 s on large datasets.
+      // Set to 90 s — comfortably above the InfluxDB client's 60 s socket timeout
+      // so the DB error surfaces rather than a generic connection drop.
+      connectionTimeout: 90_000,
     });
 
     const influxWriter = new InfluxWriter(config.influx);
@@ -38,7 +43,7 @@ const start = async () => {
       influxWriter,
       clients,
     );
-    // mqttSubscriber.connect();
+    mqttSubscriber.connect();
 
     await fastify.register(cors);
     // await fastify.register(websocket);
